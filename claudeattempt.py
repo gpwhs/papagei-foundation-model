@@ -1,4 +1,5 @@
 import numpy as np
+from sklearn.metrics import roc_curve, auc
 import seaborn as sns
 import os
 import pandas as pd
@@ -7,7 +8,7 @@ import joblib
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 from torch_ecg._preprocessors import Normalize
-from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.model_selection import train_test_split, RandomizedSearchCV
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
     classification_report,
@@ -17,6 +18,8 @@ from sklearn.metrics import (
 )
 from sklearn.preprocessing import StandardScaler
 from models.resnet import ResNet1DMoE
+from scipy.stats import uniform, loguniform
+import time
 
 
 def load_model_without_module_prefix(model, checkpoint_path):
@@ -55,7 +58,7 @@ def process_signals(df, source_fs=250, target_fs=125, target_length=1250):
     processed_signals = []
     norm = Normalize(method="z-score")
 
-    for idx, row in tqdm(df.iterrows()):
+    for idx, row in tqdm(df.iterrows(), desc="Processing signals"):
         signal = row["ppg"]
 
         # Apply z-score normalization
@@ -114,7 +117,7 @@ def extract_features(model, signals, device, target_length=1250):
     model.eval()
 
     with torch.inference_mode():
-        for signal in tqdm(signals):
+        for signal in tqdm(signals, desc="Extracting embeddings"):
             # Double check signal has correct length
             if len(signal) != target_length:
                 padding = target_length - len(signal)
@@ -139,14 +142,241 @@ def extract_features(model, signals, device, target_length=1250):
     return np.array(embeddings)
 
 
+def plot_correlation_matrix(
+    df, output_filename="correlation_matrix.png", annot_threshold=50
+):
+    """
+    Plots the correlation matrix.
+    If the number of features exceeds annot_threshold, disables annotations for clarity.
+    """
+    corr = df.corr()
+    num_features = corr.shape[0]
+    figsize = (num_features / 3, num_features / 3)  # Dynamically adjust figure size
+    plt.figure(figsize=figsize)
+    # Disable annotations if too many features
+    annot = num_features <= annot_threshold
+    sns.heatmap(corr, annot=annot, cmap="coolwarm", fmt=".2f")
+    plt.title("Correlation Matrix of Features")
+    plt.tight_layout()
+    plt.savefig(output_filename)
+    plt.close()
+    print(f"Correlation matrix saved to {output_filename}")
+    return corr
+
+
+def high_corr_features(corr_matrix, threshold=0.9):
+    """
+    Returns a set of features that have an absolute correlation greater than the threshold.
+    """
+    correlated_features = set()
+    for i in tqdm(
+        range(len(corr_matrix.columns)), desc="Finding highly correlated features"
+    ):
+        for j in range(i):
+            if abs(corr_matrix.iloc[i, j]) > threshold:
+                correlated_features.add(corr_matrix.columns[i])
+    return correlated_features
+
+
+def train_and_evaluate_model(
+    X_train, X_test, y_train, y_test, model_name, output_dir="results"
+):
+    """
+    Train a logistic regression model and evaluate it.
+
+    Args:
+        X_train: Training features
+        X_test: Testing features
+        y_train: Training labels
+        y_test: Testing labels
+        model_name: Name of the model for saving outputs
+        output_dir: Directory to save results
+
+    Returns:
+        dict: Dictionary with model and evaluation metrics
+    """
+    # Ensure output directory exists
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
+    # Standardize features
+    scaler = StandardScaler()
+    X_train_scaled = scaler.fit_transform(X_train)
+    X_test_scaled = scaler.transform(X_test)
+
+    # Define parameter distributions for RandomizedSearchCV
+
+    # Add solver based on penalty
+    def get_param_distributions():
+        param_distributions = []
+
+        # L1 penalty
+        param_distributions.append(
+            {
+                "C": loguniform(1e-4, 1e3),
+                "penalty": ["l1"],
+                "solver": ["liblinear"],  # Best solver for L1
+                "class_weight": ["balanced", None],
+            }
+        )
+
+        # L2 penalty
+        param_distributions.append(
+            {
+                "C": loguniform(1e-4, 1e3),
+                "penalty": ["l2"],
+                "solver": ["lbfgs"],  # Efficient solver for L2
+                "class_weight": ["balanced", None],
+            }
+        )
+
+        # Elasticnet penalty
+        param_distributions.append(
+            {
+                "C": loguniform(1e-4, 1e3),
+                "penalty": ["elasticnet"],
+                "solver": ["saga"],  # Only solver for elasticnet
+                "l1_ratio": uniform(0, 1),
+                "class_weight": ["balanced", None],
+            }
+        )
+
+        # No penalty
+        param_distributions.append(
+            {
+                "C": loguniform(1e-4, 1e3),
+                "penalty": ["none"],
+                "solver": ["lbfgs"],  # Efficient when no penalty
+                "class_weight": ["balanced", None],
+            }
+        )
+
+        return param_distributions
+
+    # RandomizedSearchCV for parameter tuning
+    random_search = RandomizedSearchCV(
+        LogisticRegression(max_iter=1000, random_state=42),
+        param_distributions=get_param_distributions(),
+        n_iter=60,
+        cv=3,
+        scoring="roc_auc",
+        return_train_score=True,
+        n_jobs=-1,
+        verbose=3,
+        random_state=42,
+    )
+
+    # Train the model
+    start_time = time.time()
+    random_search.fit(X_train_scaled, y_train)
+    training_time = time.time() - start_time
+
+    best_model = random_search.best_estimator_
+    print(f"{model_name} - Best parameters: {random_search.best_params_}")
+
+    # Evaluate the model
+    y_pred = best_model.predict(X_test_scaled)
+    y_pred_proba = best_model.predict_proba(X_test_scaled)[:, 1]
+
+    accuracy = accuracy_score(y_test, y_pred)
+    roc_auc = roc_auc_score(y_test, y_pred_proba)
+
+    # Print evaluation metrics
+    print(f"\n{model_name} - Hypertension Classification Results:")
+    print(f"Accuracy: {accuracy:.4f}")
+    print(f"ROC AUC: {roc_auc:.4f}")
+    print("\nClassification Report:")
+    print(classification_report(y_test, y_pred))
+
+    # Confusion matrix
+    cm = confusion_matrix(y_test, y_pred)
+    print("\nConfusion Matrix:")
+    print(cm)
+
+    # Save results to files
+    with open(f"{output_dir}/{model_name}_results.txt", "w") as f:
+        f.write(f"{model_name} - Hypertension Classification Results:\n")
+        f.write(f"Best parameters: {random_search.best_params_}\n")
+        f.write(f"Training time: {training_time:.2f} seconds\n")
+        f.write(f"Accuracy: {accuracy:.4f}\n")
+        f.write(f"ROC AUC: {roc_auc:.4f}\n\n")
+        f.write("Classification Report:\n")
+        f.write(classification_report(y_test, y_pred))
+        f.write("\nConfusion Matrix:\n")
+        f.write(str(cm))
+
+    # Save the model and scaler
+    joblib.dump(best_model, f"{output_dir}/{model_name}_classifier.joblib")
+    joblib.dump(scaler, f"{output_dir}/{model_name}_scaler.joblib")
+
+    # Plot ROC curve
+    fpr, tpr, _ = roc_curve(y_test, y_pred_proba)
+    roc_auc = auc(fpr, tpr)
+
+    plt.figure(figsize=(10, 8))
+    plt.plot(
+        fpr, tpr, color="darkorange", lw=2, label=f"ROC curve (area = {roc_auc:.2f})"
+    )
+    plt.plot([0, 1], [0, 1], color="navy", lw=2, linestyle="--")
+    plt.xlim([0.0, 1.0])
+    plt.ylim([0.0, 1.05])
+    plt.xlabel("False Positive Rate")
+    plt.ylabel("True Positive Rate")
+    plt.title(f"{model_name} - ROC Curve for Hypertension Detection")
+    plt.legend(loc="lower right")
+    plt.savefig(f"{output_dir}/{model_name}_roc_curve.png")
+    plt.close()
+
+    # Feature importance (if applicable)
+    if hasattr(best_model, "coef_"):
+        feature_importance = np.abs(best_model.coef_[0])
+        feature_names = X_train.columns
+
+        # Create DataFrame for feature importance
+        coef_df = pd.DataFrame(
+            {"feature": feature_names, "coefficient": best_model.coef_[0]}
+        )
+        coef_df["abs_coefficient"] = coef_df["coefficient"].abs()
+        coef_df = coef_df.sort_values(by="abs_coefficient", ascending=False)
+
+        # Save top features to file
+        coef_df.to_csv(f"{output_dir}/{model_name}_feature_importance.csv", index=False)
+
+        # Plot top 20 features or all if less than 20
+        num_features = min(20, len(feature_names))
+        plt.figure(figsize=(12, 8))
+        sorted_idx = np.argsort(feature_importance)[::-1]
+        top_features = sorted_idx[:num_features]
+
+        plt.barh(
+            range(len(top_features)), feature_importance[top_features], align="center"
+        )
+        plt.yticks(range(len(top_features)), [feature_names[i] for i in top_features])
+        plt.xlabel("Feature Importance")
+        plt.title(
+            f"{model_name} - Top {num_features} Features for Hypertension Detection"
+        )
+        plt.tight_layout()
+        plt.savefig(f"{output_dir}/{model_name}_feature_importance.png")
+        plt.close()
+
+    # Return results
+    return {
+        "model": best_model,
+        "scaler": scaler,
+        "accuracy": accuracy,
+        "roc_auc": roc_auc,
+        "best_params": random_search.best_params_,
+        "training_time": training_time,
+    }
+
+
 def main():
     # Load your data
     print("Loading data...")
-    df = pd.read_parquet(
-        "./data/215k_pyppg_features_and_conditions.parquet"
-    )  # Replace with your actual data path
-
+    df = pd.read_parquet("./data/215k_pyppg_features_and_conditions.parquet")
     df = df.dropna()
+
     # Convert string representations of arrays to numpy arrays if needed
     if isinstance(df["ppg"].iloc[0], str):
         df["ppg"] = df["ppg"].apply(lambda x: np.array(eval(x)))
@@ -156,8 +386,13 @@ def main():
     target_fs = 125  # Model's expected sampling frequency
     target_length = 1250  # Model's expected input length (10 seconds at 125 Hz)
 
+    # Create results directory
+    results_dir = "experiment_results"
+    if not os.path.exists(results_dir):
+        os.makedirs(results_dir)
+
     # Initialize model
-    print("Initializing model...")
+    print("Initializing PaPaGei model...")
     model_config = {
         "base_filters": 32,
         "kernel_size": 3,
@@ -180,7 +415,7 @@ def main():
     )
 
     # Load pre-trained weights
-    model_path = "weights/papagei_s.pt"  # Replace with your actual path
+    model_path = "weights/papagei_s.pt"
     try:
         model = load_model_without_module_prefix(model, model_path)
         print("Model loaded successfully")
@@ -193,8 +428,10 @@ def main():
     model.to(device)
 
     # Extract features
-    if os.path.exists("embeddings.npy"):
-        embeddings = np.load("embeddings.npy")
+    embeddings_file = "embeddings.npy"
+    if os.path.exists(embeddings_file):
+        print(f"Loading pre-computed embeddings from {embeddings_file}")
+        embeddings = np.load(embeddings_file)
     else:
         # Process signals
         print("Processing signals...")
@@ -203,188 +440,142 @@ def main():
         )
         print("Extracting features...")
         embeddings = extract_features(model, processed_signals, device, target_length)
-        np.save("embeddings.npy", embeddings)
+        np.save(embeddings_file, embeddings)
+        print(f"Embeddings saved to {embeddings_file}")
 
-    # Create features DataFrame
-    print("Creating features DataFrame...")
+    # Create feature DataFrames for the three experiments
+    print("Creating feature DataFrames for experiments...")
+
+    # Get column names for embeddings
     embedding_cols = [f"emb_{i}" for i in range(embeddings.shape[1])]
-    features_df = pd.DataFrame(embeddings, columns=embedding_cols)
-    features_df["Hypertension"] = df["Hypertension"].values
 
-    # Add metadata columns if available
+    # Create basic DataFrame with embeddings
+    embedding_df = pd.DataFrame(embeddings, columns=embedding_cols)
+
+    # Add target variable
+    embedding_df["Hypertension"] = df["Hypertension"].values
+
+    # Add metadata columns
+    metadata_cols = []
     for col in ["age", "sex", "BMI"]:
         if col in df.columns:
-            features_df[col] = df[col].values
+            embedding_df[col] = df[col].values
+            metadata_cols.append(col)
 
-    # ---------- Correlation Matrix and High-Correlation Check ----------
-    def plot_correlation_matrix(
-        df, output_filename="correlation_matrix.png", annot_threshold=50
-    ):
-        """
-        Plots the correlation matrix.
-        If the number of features exceeds annot_threshold, disables annotations for clarity.
-        """
-        corr = df.corr()
-        num_features = corr.shape[0]
-        figsize = (num_features / 3, num_features / 3)  # Dynamically adjust figure size
-        plt.figure(figsize=figsize)
-        # Disable annotations if too many features
-        annot = num_features <= annot_threshold
-        sns.heatmap(corr, annot=annot, cmap="coolwarm", fmt=".2f")
-        plt.title("Correlation Matrix of Features")
-        plt.tight_layout()
-        plt.savefig(output_filename)
-        plt.close()
-        print(f"Correlation matrix saved to {output_filename}")
-        return corr
+    # Split data for all experiments at once (to ensure same split for all experiments)
+    # Separate features and target
+    all_features = embedding_df.drop("Hypertension", axis=1)
+    target = embedding_df["Hypertension"]
 
-    corr = plot_correlation_matrix(features_df)
-
-    def high_corr_features(corr_matrix, threshold=0.9):
-        """
-        Returns a set of features that have an absolute correlation greater than the threshold.
-        """
-        correlated_features = set()
-        for i in tqdm(range(len(corr_matrix.columns))):
-            for j in range(i):
-                if abs(corr_matrix.iloc[i, j]) > threshold:
-                    correlated_features.add(corr_matrix.columns[i])
-        return correlated_features
-
-    high_corr = high_corr_features(corr, threshold=0.9)
-    print("Highly correlated features (correlation > 0.9):", high_corr)
-
-    # ---------- Data Preparation ----------
-    print("Preparing data for classification...")
-    X = features_df.drop("Hypertension", axis=1)
-    y = features_df["Hypertension"]
-
+    # Create train/test splits
     X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42, stratify=y
+        all_features, target, test_size=0.2, random_state=42, stratify=target
     )
 
-    scaler = StandardScaler()
-    X_train_scaled = scaler.fit_transform(X_train)
-    X_test_scaled = scaler.transform(X_test)
+    # Experiment M0: Only PaPaGei features
+    print("\n--- Running Experiment M0: Only PaPaGei features ---")
+    X_train_M0 = X_train[embedding_cols]
+    X_test_M0 = X_test[embedding_cols]
 
-    # ---------- Logistic Regression Model Training ----------
-    print("Training logistic regression model...")
-    param_grid = [
-        {
-            "C": np.logspace(-3, 2, 6),
-            "penalty": ["l1"],
-            "solver": ["liblinear"],
-            "class_weight": ["balanced", None],
-        },
-        {
-            "C": np.logspace(-3, 2, 6),
-            "penalty": ["l2"],
-            "solver": ["liblinear", "lbfgs", "saga"],
-            "class_weight": ["balanced", None],
-        },
-        {
-            "C": np.logspace(-3, 2, 6),
-            "penalty": ["elasticnet"],
-            "l1_ratio": [0.1, 0.5, 0.9],
-            "solver": ["saga"],
-            "class_weight": ["balanced", None],
-        },
-    ]
+    # Experiment M1: Only metadata (age, sex, BMI)
+    print("\n--- Running Experiment M1: Only metadata (age, sex, BMI) ---")
+    X_train_M1 = X_train[metadata_cols]
+    X_test_M1 = X_test[metadata_cols]
 
-    grid_search = GridSearchCV(
-        LogisticRegression(max_iter=1000, random_state=42, verbose=1),
-        param_grid,
-        cv=5,
-        scoring="roc_auc",
-        return_train_score=True,
-        n_jobs=-1,
-        verbose=3,
+    # Experiment M2: Both PaPaGei features and metadata
+    print("\n--- Running Experiment M2: Both PaPaGei features and metadata ---")
+    X_train_M2 = X_train[embedding_cols + metadata_cols]
+    X_test_M2 = X_test[embedding_cols + metadata_cols]
+
+    # For each experiment, train and evaluate a model
+    results = {}
+
+    # M0: Only PaPaGei features
+    results["M0"] = train_and_evaluate_model(
+        X_train_M0,
+        X_test_M0,
+        y_train,
+        y_test,
+        model_name="M0_PaPaGei_Only",
+        output_dir=results_dir,
     )
-    grid_search.fit(X_train_scaled, y_train)
-    best_model = grid_search.best_estimator_
-    print("Best hyperparameters:", grid_search.best_params_)
 
-    # ---------- Model Evaluation ----------
-    y_pred = best_model.predict(X_test_scaled)
-    y_pred_proba = best_model.predict_proba(X_test_scaled)[:, 1]
+    # M1: Only metadata
+    results["M1"] = train_and_evaluate_model(
+        X_train_M1,
+        X_test_M1,
+        y_train,
+        y_test,
+        model_name="M1_Metadata_Only",
+        output_dir=results_dir,
+    )
 
-    # ---------- Logistic Regression Coefficient Analysis ----------
-    coefs = best_model.coef_.flatten()
-    feature_names = X.columns
-    coef_df = pd.DataFrame({"feature": feature_names, "coefficient": coefs})
-    coef_df["abs_coefficient"] = coef_df["coefficient"].abs()
-    coef_df = coef_df.sort_values(by="abs_coefficient", ascending=False)
-    print("Top 10 features based on logistic regression coefficients:")
-    print(coef_df.head(10))
+    # M2: Both PaPaGei features and metadata
+    results["M2"] = train_and_evaluate_model(
+        X_train_M2,
+        X_test_M2,
+        y_train,
+        y_test,
+        model_name="M2_PaPaGei_And_Metadata",
+        output_dir=results_dir,
+    )
 
-    # Plot top 20 features by absolute coefficient value
-    plt.figure(figsize=(12, 6))
-    sns.barplot(x="abs_coefficient", y="feature", data=coef_df.head(20))
-    plt.title("Top 20 Features by Absolute Coefficient Value")
+    # Create summary of results
+    summary = pd.DataFrame(
+        {
+            "Model": [
+                "M0: PaPaGei Only",
+                "M1: Metadata Only",
+                "M2: PaPaGei + Metadata",
+            ],
+            "Accuracy": [
+                results["M0"]["accuracy"],
+                results["M1"]["accuracy"],
+                results["M2"]["accuracy"],
+            ],
+            "ROC_AUC": [
+                results["M0"]["roc_auc"],
+                results["M1"]["roc_auc"],
+                results["M2"]["roc_auc"],
+            ],
+            "Training_Time": [
+                results["M0"]["training_time"],
+                results["M1"]["training_time"],
+                results["M2"]["training_time"],
+            ],
+        }
+    )
+
+    summary.to_csv(f"{results_dir}/experiment_summary.csv", index=False)
+    print("\nExperiment Summary:")
+    print(summary)
+
+    # Plot results comparison
+    plt.figure(figsize=(10, 6))
+
+    # Bar plot for accuracy
+    plt.subplot(1, 2, 1)
+    plt.bar(summary["Model"], summary["Accuracy"], color="blue")
+    plt.ylabel("Accuracy")
+    plt.title("Accuracy Comparison")
+    plt.xticks(rotation=45, ha="right")
     plt.tight_layout()
-    plt.savefig("top_features.png")
-    plt.close()
-    print("Top features plot saved to top_features.png")
 
-    print("\nHypertension Classification Results:")
-    print(f"Best parameters: {grid_search.best_params_}")
-    print(f"\nAccuracy: {accuracy_score(y_test, y_pred):.4f}")
-    print(f"ROC AUC: {roc_auc_score(y_test, y_pred_proba):.4f}")
-    print("\nClassification Report:")
-    print(classification_report(y_test, y_pred))
+    # Bar plot for ROC AUC
+    plt.subplot(1, 2, 2)
+    plt.bar(summary["Model"], summary["ROC_AUC"], color="orange")
+    plt.ylabel("ROC AUC")
+    plt.title("ROC AUC Comparison")
+    plt.xticks(rotation=45, ha="right")
+    plt.tight_layout()
 
-    print("\nConfusion Matrix:")
-    cm = confusion_matrix(y_test, y_pred)
-    print(cm)
-
-    # Save the model and scaler
-    print("Saving model and scaler...")
-    joblib.dump(best_model, "Hypertension_classifier.joblib")
-    joblib.dump(scaler, "feature_scaler.joblib")
-
-    # Plot ROC curve
-    from sklearn.metrics import roc_curve, auc
-
-    fpr, tpr, _ = roc_curve(y_test, y_pred_proba)
-    roc_auc = auc(fpr, tpr)
-
-    plt.figure(figsize=(10, 8))
-    plt.plot(
-        fpr, tpr, color="darkorange", lw=2, label=f"ROC curve (area = {roc_auc:.2f})"
-    )
-    plt.plot([0, 1], [0, 1], color="navy", lw=2, linestyle="--")
-    plt.xlim([0.0, 1.0])
-    plt.ylim([0.0, 1.05])
-    plt.xlabel("False Positive Rate")
-    plt.ylabel("True Positive Rate")
-    plt.title("Receiver Operating Characteristic for Hypertension Detection")
-    plt.legend(loc="lower right")
-    plt.savefig("Hypertension_roc_curve.png")
+    plt.savefig(f"{results_dir}/experiment_comparison.png")
     plt.close()
 
-    # Feature importance
-    if hasattr(best_model, "coef_"):
-        # Get feature importance for logistic regression
-        feature_importance = np.abs(best_model.coef_[0])
-        feature_names = X.columns
+    print(f"All experiments completed successfully! Results saved to {results_dir}/")
 
-        # Sort features by importance
-        sorted_idx = np.argsort(feature_importance)[::-1]
-        top_features = sorted_idx[:20]  # Top 20 features
 
-        plt.figure(figsize=(12, 8))
-        plt.barh(
-            range(len(top_features)), feature_importance[top_features], align="center"
-        )
-        plt.yticks(range(len(top_features)), [feature_names[i] for i in top_features])
-        plt.xlabel("Feature Importance")
-        plt.title("Top 20 Features for Hypertension Detection")
-        plt.tight_layout()
-        plt.savefig("Hypertension_feature_importance.png")
-        plt.close()
-
-    print("Completed successfully!")
-
+# Add import for ROC curve functions
 
 if __name__ == "__main__":
     main()
