@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import torch
 import json
-from utils import bootstrap_metric_confidence_interval
+from .utils import bootstrap_metric_confidence_interval
 from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score, roc_auc_score, f1_score

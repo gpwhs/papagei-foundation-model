@@ -178,16 +178,16 @@ def get_data_info(dataset_name, prefix="", usecolumns=None):
         df_test.loc[:, case_name] = df_test[case_name].apply(lambda x:str(x).zfill(4))
     
     if dataset_name == "ppg-bp":
-        case_name = "subject_ID"
-        path = f"{prefix}../data/ppg-bp/ppg"  
+        case_name = "case_id"
+        path = f"/data/ppg-bp/ppg"
         if usecolumns is not None:
             usecols = np.concatenate([[case_name], usecolumns])
         else:
             usecols = None 
 
-        df_train = pd.read_csv(f"{prefix}../data/ppg-bp/train.csv", usecols=usecols)
-        df_val = pd.read_csv(f"{prefix}../data/ppg-bp/val.csv", usecols=usecols)
-        df_test = pd.read_csv(f"{prefix}../data/ppg-bp/test.csv", usecols=usecols)
+        df_train = pd.read_csv(f'data/ppg-bp/train.csv', usecols=usecols)
+        df_val = pd.read_csv(f"data/ppg-bp/val.csv", usecols=usecols)
+        df_test = pd.read_csv(f"data/ppg-bp/test.csv", usecols=usecols)
 
         df_train.loc[:, case_name] = df_train[case_name].apply(lambda x:str(x).zfill(4))
         df_val.loc[:, case_name] = df_val[case_name].apply(lambda x:str(x).zfill(4))
