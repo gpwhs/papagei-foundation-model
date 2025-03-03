@@ -1,0 +1,19 @@
+M0_XGBoost_PaPaGei_Only - Hypertension Classification Results:
+Best parameters: {'subsample': 1.0, 'scale_pos_weight': 3, 'reg_lambda': 0.1, 'reg_alpha': 0.01, 'n_estimators': 500, 'min_child_weight': 10, 'max_depth': 8, 'learning_rate': 0.01, 'gamma': 1.0, 'colsample_bytree': 0.6}
+Training time: 2309.64 seconds
+Accuracy: 0.5721
+ROC AUC: 0.6892
+
+Classification Report:
+              precision    recall  f1-score   support
+
+         0.0       0.80      0.09      0.17     18931
+         1.0       0.56      0.98      0.71     22230
+
+    accuracy                           0.57     41161
+   macro avg       0.68      0.54      0.44     41161
+weighted avg       0.67      0.57      0.46     41161
+
+Confusion Matrix:
+[[ 1776 17155]
+ [  457 21773]]
