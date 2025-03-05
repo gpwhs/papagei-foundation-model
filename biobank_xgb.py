@@ -510,7 +510,9 @@ def main() -> None:
     """Main function to run the experiments with XGBoost."""
     # Load your data
     print("Loading data...")
-    df = pd.read_parquet("./data/215k_pyppg_features_and_conditions.parquet")
+    df = pd.read_parquet(
+        f"{os.getenv('BIOBANK_DATA_PATH')}/215k_pyppg_features_and_conditions.parquet"
+    )
     df = df.dropna()
 
     # Convert string representations of arrays to numpy arrays if needed

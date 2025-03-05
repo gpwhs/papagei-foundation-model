@@ -374,7 +374,9 @@ def train_and_evaluate_model(
 def main():
     # Load your data
     print("Loading data...")
-    df = pd.read_parquet("./data/215k_pyppg_features_and_conditions.parquet")
+    df = pd.read_parquet(
+        f"{os.getenv('BIOBANK_DATA_PATH')}/215k_pyppg_features_and_conditions.parquet"
+    )
     df = df.dropna()
 
     # Convert string representations of arrays to numpy arrays if needed
@@ -546,7 +548,7 @@ def main():
         }
     )
 
-    summary.to_csv(f"{results_dir}/experiment_summary.csv", index=False)
+    summary.to_csv(f"{results_dir}/experiment_summary_LR.csv", index=False)
     print("\nExperiment Summary:")
     print(summary)
 
@@ -569,7 +571,7 @@ def main():
     plt.xticks(rotation=45, ha="right")
     plt.tight_layout()
 
-    plt.savefig(f"{results_dir}/experiment_comparison.png")
+    plt.savefig(f"{results_dir}/experiment_comparison_LR.png")
     plt.close()
 
     print(f"All experiments completed successfully! Results saved to {results_dir}/")
