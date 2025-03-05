@@ -1,0 +1,19 @@
+M2_PaPaGei_And_Metadata - Hypertension Classification Results:
+Best parameters: {'C': np.float64(9.536602242620404), 'class_weight': 'balanced', 'penalty': 'l1', 'solver': 'liblinear'}
+Training time: 26434.10 seconds
+Accuracy: 0.7135
+ROC AUC: 0.7845
+
+Classification Report:
+              precision    recall  f1-score   support
+
+         0.0       0.68      0.70      0.69     18931
+         1.0       0.74      0.72      0.73     22230
+
+    accuracy                           0.71     41161
+   macro avg       0.71      0.71      0.71     41161
+weighted avg       0.71      0.71      0.71     41161
+
+Confusion Matrix:
+[[13282  5649]
+ [ 6144 16086]]
