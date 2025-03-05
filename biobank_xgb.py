@@ -746,7 +746,7 @@ def main() -> None:
         }
     )
 
-    summary.to_csv(f"{results_dir}/experiment_summary.csv", index=False)
+    summary.to_csv(f"{results_dir}/experiment_summary_xgb.csv", index=False)
     print("\nExperiment Summary:")
     print(summary)
 
@@ -769,7 +769,7 @@ def main() -> None:
     plt.xticks(rotation=45, ha="right")
     plt.tight_layout()
 
-    plt.savefig(f"{results_dir}/experiment_comparison.png")
+    plt.savefig(f"{results_dir}/experiment_comparison_xgb.png")
     plt.close()
 
     print(f"All experiments completed successfully! Results saved to {results_dir}/")
