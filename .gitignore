@@ -36,6 +36,7 @@ MANIFEST
 ./weights/
 weights
 *.npy
+*.parquet
 # Installer logs
 pip-log.txt
 pip-delete-this-directory.txt
