@@ -204,7 +204,7 @@ def train_and_evaluate_model(
     X_test_scaled = scaler.transform(X_test)
 
     # Set up model and hyperparameter search space
-    model, parameter_distributions = setup_model(ModelTypes[model_type])
+    model, parameter_distributions = setup_model(ModelTypes(model_type))
 
     # RandomizedSearchCV for parameter tuning
     random_search = RandomizedSearchCV(
