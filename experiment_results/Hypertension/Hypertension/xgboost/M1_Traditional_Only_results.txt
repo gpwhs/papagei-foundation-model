@@ -1,0 +1,20 @@
+xgboost M1_Traditional_Only - Hypertension Classification Results:
+Best parameters: {'n_estimators': 50}
+Training time: 1.10 seconds
+Accuracy: 0.6737 (CI: 0.6693-0.6782)
+ROC AUC: 0.7282 (CI: 0.7231-0.7331)
+F1 Score: 0.7132 (CI: 0.7083-0.7175)
+
+Classification Report:
+              precision    recall  f1-score   support
+
+         0.0       0.67      0.58      0.62     18931
+         1.0       0.68      0.75      0.71     22230
+
+    accuracy                           0.67     41161
+   macro avg       0.67      0.67      0.67     41161
+weighted avg       0.67      0.67      0.67     41161
+
+Confusion Matrix:
+[[11032  7899]
+ [ 5532 16698]]

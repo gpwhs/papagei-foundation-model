@@ -1,0 +1,20 @@
+xgboost M2_PaPaGei_Traditional - T2DM Classification Results:
+Best parameters: {'n_estimators': 50}
+Training time: 6.62 seconds
+Accuracy: 0.9433 (CI: 0.9409-0.9458)
+ROC AUC: 0.7413 (CI: 0.7314-0.7518)
+F1 Score: 0.0152 (CI: 0.0085-0.0223)
+
+Classification Report:
+              precision    recall  f1-score   support
+
+         0.0       0.94      1.00      0.97     38854
+         1.0       0.29      0.01      0.02      2307
+
+    accuracy                           0.94     41161
+   macro avg       0.62      0.50      0.49     41161
+weighted avg       0.91      0.94      0.92     41161
+
+Confusion Matrix:
+[[38810    44]
+ [ 2289    18]]

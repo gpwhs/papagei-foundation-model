@@ -1,0 +1,20 @@
+xgboost M4_pyPPG_Traditional - Hypertension Classification Results:
+Best parameters: {'n_estimators': 50}
+Training time: 3.68 seconds
+Accuracy: 0.6727 (CI: 0.6682-0.6770)
+ROC AUC: 0.7243 (CI: 0.7193-0.7291)
+F1 Score: 0.7126 (CI: 0.7079-0.7169)
+
+Classification Report:
+              precision    recall  f1-score   support
+
+         0.0       0.67      0.58      0.62     18931
+         1.0       0.68      0.75      0.71     22230
+
+    accuracy                           0.67     41161
+   macro avg       0.67      0.67      0.67     41161
+weighted avg       0.67      0.67      0.67     41161
+
+Confusion Matrix:
+[[10979  7952]
+ [ 5522 16708]]

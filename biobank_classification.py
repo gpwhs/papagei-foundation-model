@@ -1,7 +1,7 @@
 import os
 import time
 import argparse
-from typing import Dict, List, Tuple, Any
+from typing import Dict, List, Tuple, Any, Optional
 
 import numpy as np
 import pandas as pd
@@ -64,6 +64,240 @@ class ExperimentConfig:
         self.name = name
         self.description = description
         self.feature_columns = feature_columns
+
+
+def plot_calibration_curves(
+    results: Dict[str, Any],
+    y_test: pd.Series,
+    model_predictions: Dict[str, np.ndarray],
+    model_dir: str,
+) -> Dict[str, float]:
+    """
+    Plot calibration curves for all models and compute calibration metrics.
+
+    Args:
+        results: Dictionary of model results
+        y_test: True labels
+        model_predictions: Dictionary mapping model keys to predicted probabilities
+        model_dir: Directory to save plot
+
+    Returns:
+        Dictionary of calibration metrics (Brier scores) for each model
+    """
+    from sklearn.calibration import calibration_curve, CalibrationDisplay
+    from sklearn.metrics import brier_score_loss
+
+    plt.figure(figsize=(12, 9))
+
+    # Set up colors for the different models
+    colors = ["blue", "orange", "green", "red", "purple"]
+
+    # Dictionary to store calibration metrics
+    calibration_metrics = {}
+    ece_values = compute_expected_calibration_error(results, y_test, model_predictions)
+
+    # For each model, plot calibration curve and compute metrics
+    for i, model_key in enumerate(["M0", "M1", "M2", "M3", "M4"]):
+        if model_key not in model_predictions:
+            continue
+
+        y_pred_proba = model_predictions[model_key]
+
+        # Compute calibration curve
+        prob_true, prob_pred = calibration_curve(y_test, y_pred_proba, n_bins=10)
+
+        # Compute Brier score (lower is better)
+        brier_score = brier_score_loss(y_test, y_pred_proba)
+        calibration_metrics[model_key] = brier_score
+
+        # Plot calibration curve with metrics in the label
+        plt.plot(
+            prob_pred,
+            prob_true,
+            marker="o",
+            linewidth=2,
+            label=f"{model_key} - Brier: {brier_score:.4f}, ECE: {ece_values[model_key]:.4f}",
+            color=colors[i],
+        )
+
+    # Plot perfectly calibrated line
+    plt.plot([0, 1], [0, 1], linestyle="--", color="gray", label="Perfectly calibrated")
+
+    # Add areas for over/under confidence labeling
+    plt.text(0.25, 0.75, "Underconfidence", fontsize=12, alpha=0.7, ha="center")
+    plt.text(0.75, 0.25, "Overconfidence", fontsize=12, alpha=0.7, ha="center")
+
+    # Fill areas for better visualization
+    plt.fill_between([0, 1], [0, 1], [0, 0], alpha=0.1, color="red", label="_nolegend_")
+    plt.fill_between(
+        [0, 1], [1, 1], [0, 1], alpha=0.1, color="blue", label="_nolegend_"
+    )
+
+    # Add diagonal grid lines to help with assessment
+    plt.grid(True, alpha=0.3)
+
+    # Set plot attributes
+    plt.xlabel("Predicted probability")
+    plt.ylabel("True probability in each bin")
+    plt.title("Calibration Curves with Metrics")
+    plt.legend(loc="best")
+
+    # Add axis limits and ensure equal aspect ratio
+    plt.xlim(0, 1)
+    plt.ylim(0, 1)
+    plt.gca().set_aspect("equal", adjustable="box")
+
+    # Add model explanations in top left
+    model_names = {
+        "M0": "PaPaGei Only",
+        "M1": "Traditional Factors",
+        "M2": "PaPaGei + Traditional",
+        "M3": "pyPPG Only",
+        "M4": "pyPPG + Traditional",
+    }
+
+    info_text = "\n".join([f"{k}: {v}" for k, v in model_names.items()])
+    plt.annotate(
+        info_text,
+        xy=(0.02, 0.98),
+        xycoords="axes fraction",
+        fontsize=10,
+        ha="left",
+        va="top",
+        bbox=dict(boxstyle="round,pad=0.5", fc="white", alpha=0.7),
+    )
+
+    # Save plot
+    plt.tight_layout()
+    plt.savefig(f"{model_dir}/calibration_curves.png")
+    plt.close()
+
+    # Create a bar chart of Brier scores
+    plt.figure(figsize=(10, 6))
+
+    model_names = list(calibration_metrics.keys())
+    brier_scores = [calibration_metrics[m] for m in model_names]
+    x = np.arange(len(model_names))
+
+    bars = plt.bar(x, brier_scores, width=0.5, color=colors[: len(model_names)])
+
+    # Add value labels above each bar
+    for bar in bars:
+        height = bar.get_height()
+        plt.text(
+            bar.get_x() + bar.get_width() / 2.0,
+            height + 0.005,
+            f"{height:.4f}",
+            ha="center",
+            va="bottom",
+            fontsize=9,
+        )
+
+    plt.xlabel("Model")
+    plt.ylabel("Brier Score (lower is better)")
+    plt.title("Calibration Error (Brier Score)")
+    plt.xticks(x, model_names)
+    plt.grid(axis="y", linestyle="--", alpha=0.7)
+
+    plt.tight_layout()
+    plt.savefig(f"{model_dir}/brier_scores.png")
+    plt.close()
+
+    # Also create a bar chart of ECE values
+    plt.figure(figsize=(10, 6))
+
+    model_names = list(ece_values.keys())
+    ece_scores = [ece_values[m] for m in model_names]
+    x = np.arange(len(model_names))
+
+    bars = plt.bar(x, ece_scores, width=0.5, color=colors[: len(model_names)])
+
+    # Add value labels above each bar
+    for bar in bars:
+        height = bar.get_height()
+        plt.text(
+            bar.get_x() + bar.get_width() / 2.0,
+            height + 0.005,
+            f"{height:.4f}",
+            ha="center",
+            va="bottom",
+            fontsize=9,
+        )
+
+    plt.xlabel("Model")
+    plt.ylabel("Expected Calibration Error (lower is better)")
+    plt.title("Expected Calibration Error (ECE)")
+    plt.xticks(x, model_names)
+    plt.grid(axis="y", linestyle="--", alpha=0.7)
+
+    plt.tight_layout()
+    plt.savefig(f"{model_dir}/ece_values.png")
+    plt.close()
+
+    # Create a summary DataFrame with both metrics
+    calibration_summary = pd.DataFrame(
+        {"Model": model_names, "Brier_Score": brier_scores, "ECE": ece_scores}
+    )
+    calibration_summary.to_csv(f"{model_dir}/calibration_metrics.csv", index=False)
+
+    return calibration_metrics
+
+
+def compute_expected_calibration_error(
+    results: Dict[str, Any],
+    y_test: pd.Series,
+    model_predictions: Dict[str, np.ndarray],
+    n_bins: int = 10,
+) -> Dict[str, float]:
+    """
+    Compute Expected Calibration Error (ECE) for each model.
+
+    ECE measures the difference between predicted probabilities and the true fraction
+    of positive samples by binning predictions and taking a weighted average.
+
+    Args:
+        results: Dictionary of model results
+        y_test: True labels
+        model_predictions: Dictionary mapping model keys to predicted probabilities
+        n_bins: Number of bins for calculating ECE
+
+    Returns:
+        Dictionary of ECE values for each model
+    """
+    ece_values = {}
+
+    for model_key in model_predictions:
+        y_pred_proba = model_predictions[model_key]
+
+        # Bin predictions
+        bin_indices = np.linspace(0, 1, n_bins + 1)
+        bin_assignments = np.digitize(y_pred_proba, bin_indices) - 1
+        bin_assignments = np.clip(
+            bin_assignments, 0, n_bins - 1
+        )  # Clip values at the edges
+
+        # Calculate ECE
+        ece = 0
+        for bin_idx in range(n_bins):
+            # Get samples in this bin
+            bin_mask = bin_assignments == bin_idx
+            if not np.any(bin_mask):
+                continue
+
+            bin_preds = y_pred_proba[bin_mask]
+            bin_true = y_test.values[bin_mask]
+            bin_size = bin_mask.sum()
+
+            # Calculate average prediction and true fraction for this bin
+            avg_pred = np.mean(bin_preds)
+            true_frac = np.mean(bin_true)
+
+            # Add weighted absolute difference to ECE
+            ece += (bin_size / len(y_test)) * np.abs(avg_pred - true_frac)
+
+        ece_values[model_key] = ece
+
+    return ece_values
 
 
 def get_embeddings(df: pd.DataFrame, cache_file: str = "embeddings.npy") -> np.ndarray:
@@ -198,6 +432,10 @@ def plot_learning_curves(
     if model_type != ModelTypes.XGBOOST.value:
         return
 
+    # Ensure model type subdirectory exists
+    model_dir = f"{output_dir}/{model_type}"
+    os.makedirs(model_dir, exist_ok=True)
+
     try:
         import xgboost as xgb
 
@@ -239,11 +477,11 @@ def plot_learning_curves(
                 plt.legend()
 
             plt.tight_layout()
-            plt.savefig(f"{output_dir}/{model_type}_{model_name}_learning_curves.png")
+            plt.savefig(f"{model_dir}/{model_name}_learning_curves.png")
             plt.close()
 
             print(
-                f"Learning curves saved to {output_dir}/{model_type}_{model_name}_learning_curves.png"
+                f"Learning curves saved to {model_dir}/{model_name}_learning_curves.png"
             )
         else:
             # If no validation results, we'll use a modified approach by training a new model
@@ -320,11 +558,11 @@ def plot_learning_curves(
                 plt.legend()
 
             plt.tight_layout()
-            plt.savefig(f"{output_dir}/{model_type}_{model_name}_learning_curves.png")
+            plt.savefig(f"{model_dir}/{model_name}_learning_curves.png")
             plt.close()
 
             print(
-                f"Learning curves saved to {output_dir}/{model_type}_{model_name}_learning_curves.png"
+                f"Learning curves saved to {model_dir}/{model_name}_learning_curves.png"
             )
 
     except ImportError:
@@ -357,6 +595,10 @@ def explain_model_predictions(
         output_dir: Directory to save results
         num_samples: Number of random samples to explain
     """
+    # Ensure model type subdirectory exists
+    model_dir = f"{output_dir}/{model_type}"
+    os.makedirs(model_dir, exist_ok=True)
+
     try:
         import shap
 
@@ -388,7 +630,7 @@ def explain_model_predictions(
                 f"Sample {i+1} - True Label: {y_samples.iloc[i]}, Predicted: {model.predict(X_samples.iloc[[i]])[0]}"
             )
             plt.tight_layout()
-            plt.savefig(f"{output_dir}/{model_type}_{model_name}_shap_sample_{i+1}.png")
+            plt.savefig(f"{model_dir}/{model_name}_shap_sample_{i+1}.png")
             plt.close()
 
         # Create summary plot for all test data
@@ -404,7 +646,7 @@ def explain_model_predictions(
         shap.plots.bar(shap_values_summary, show=False)
         plt.title(f"{model_name} - SHAP Feature Importance")
         plt.tight_layout()
-        plt.savefig(f"{output_dir}/{model_type}_{model_name}_shap_importance.png")
+        plt.savefig(f"{model_dir}/{model_name}_shap_importance.png")
         plt.close()
 
         # Beeswarm summary plot
@@ -412,11 +654,16 @@ def explain_model_predictions(
         shap.plots.beeswarm(shap_values_summary, show=False)
         plt.title(f"{model_name} - SHAP Summary Plot")
         plt.tight_layout()
-        plt.savefig(f"{output_dir}/{model_type}_{model_name}_shap_summary.png")
+        plt.savefig(f"{model_dir}/{model_name}_shap_summary.png")
         plt.close()
 
     except ImportError:
         print("SHAP package not installed. Skipping model explanation.")
+    except Exception as e:
+        print(f"Error generating SHAP explanations: {e}")
+        import traceback
+
+        traceback.print_exc()
 
 
 def train_and_evaluate_model(
@@ -428,7 +675,8 @@ def train_and_evaluate_model(
     model_name: str,
     outcome: str,
     output_dir: str,
-) -> ClassificationResults:
+    collect_predictions: bool = True,
+) -> Tuple[ClassificationResults, Optional[np.ndarray]]:
     """Train a model and evaluate it.
 
     Args:
@@ -440,9 +688,10 @@ def train_and_evaluate_model(
         model_name: Name of the model for saving outputs
         outcome: Name of the outcome variable
         output_dir: Directory to save results
+        collect_predictions: Whether to return prediction probabilities for calibration analysis
 
     Returns:
-        ClassificationResults with model and evaluation metrics
+        Tuple of (ClassificationResults, predicted_probabilities)
     """
     # Ensure output directory exists
     model_output_dir = f"{output_dir}/{model_type}"
@@ -538,8 +787,8 @@ def train_and_evaluate_model(
     )
 
     # Save the model and scaler
-    joblib.dump(best_model, f"{output_dir}/{model_type}_{model_name}_classifier.joblib")
-    joblib.dump(scaler, f"{output_dir}/{model_type}_{model_name}_scaler.joblib")
+    joblib.dump(best_model, f"{model_output_dir}/{model_name}_classifier.joblib")
+    joblib.dump(scaler, f"{model_output_dir}/{model_name}_scaler.joblib")
 
     # Plot ROC curve
     plot_roc_curve(
@@ -583,8 +832,8 @@ def train_and_evaluate_model(
         output_dir,
     )
 
-    # Return results
-    return ClassificationResults(
+    # Create results object
+    results = ClassificationResults(
         model=model_type,
         parameters=random_search.best_params_,
         auc=roc_auc,
@@ -598,6 +847,11 @@ def train_and_evaluate_model(
         accuracy_upper_ci=accuracy_ci_upper,
         training_time=training_time,
     )
+
+    if collect_predictions:
+        return results, y_pred_proba
+    else:
+        return results, None
 
 
 def save_results_to_file(
@@ -663,6 +917,10 @@ def plot_roc_curve(
         outcome: Outcome being predicted
         output_dir: Directory to save plot
     """
+    # Ensure model type subdirectory exists
+    model_dir = f"{output_dir}/{model_type}"
+    os.makedirs(model_dir, exist_ok=True)
+
     fpr, tpr, _ = roc_curve(y_test, y_pred_proba)
     roc_auc = auc(fpr, tpr)
 
@@ -677,7 +935,7 @@ def plot_roc_curve(
     plt.ylabel("True Positive Rate")
     plt.title(f"{model_type} {model_name} - ROC Curve for {outcome} Detection")
     plt.legend(loc="lower right")
-    plt.savefig(f"{output_dir}/{model_type}_{model_name}_roc_curve.png")
+    plt.savefig(f"{model_dir}/{model_name}_roc_curve.png")
     plt.close()
 
 
@@ -770,7 +1028,7 @@ def run_experiment(
     model_type: str,
     outcome: str,
     output_dir: str,
-) -> ClassificationResults:
+) -> Tuple[ClassificationResults, np.ndarray]:
     """Run a single experiment.
 
     Args:
@@ -781,7 +1039,7 @@ def run_experiment(
         output_dir: Directory to save results
 
     Returns:
-        Results of the experiment
+        Tuple of (ClassificationResults, prediction_probabilities)
     """
     print(
         f"\n--- Running Experiment {experiment_config.name}: {experiment_config.description} ---"
@@ -792,7 +1050,7 @@ def run_experiment(
     X_test_exp = X_test[experiment_config.feature_columns]
 
     # Train and evaluate
-    return train_and_evaluate_model(
+    results, y_pred_proba = train_and_evaluate_model(
         X_train_exp,
         X_test_exp,
         y_train,
@@ -801,7 +1059,10 @@ def run_experiment(
         model_name=experiment_config.name,
         outcome=outcome,
         output_dir=output_dir,
+        collect_predictions=True,
     )
+
+    return results, y_pred_proba
 
 
 def main() -> None:
@@ -824,9 +1085,10 @@ def main() -> None:
     results_dir = config["results_directory"]
     print(f"Running experiments with model {model} for outcome {outcome}")
 
-    # Ensure results directory exists
-    os.makedirs(results_dir, exist_ok=True)
-    os.makedirs(f"{results_dir}/{model}", exist_ok=True)
+    # Create a nested directory structure
+    outcome_dir = f"{results_dir}/{outcome}"
+    model_dir = f"{outcome_dir}/{model}"
+    os.makedirs(model_dir, exist_ok=True)
 
     # Load data
     print("Loading data...")
@@ -868,8 +1130,10 @@ def main() -> None:
 
     # Run experiments
     results = {}
+    model_predictions = {}
+
     for exp_key, exp_config in tqdm(experiments.items()):
-        results[exp_key] = run_experiment(
+        results[exp_key], model_predictions[exp_key] = run_experiment(
             experiment_config=exp_config,
             X_train=X_train,
             X_test=X_test,
@@ -877,18 +1141,40 @@ def main() -> None:
             y_test=y_test,
             model_type=model,
             outcome=outcome,
-            output_dir=results_dir,
+            output_dir=outcome_dir,  # Pass outcome directory as the output_dir
         )
 
     # Save results
-    with open(f"{results_dir}/experiment_results_{model}.json", "w") as f:
+    with open(f"{model_dir}/experiment_results.json", "w") as f:
         import json
 
-        f.write(json.dumps({k: v.dict() for k, v in results.items()}, indent=2))
+        # Use model_dump() instead of dict() for Pydantic v2 compatibility
+        try:
+            # For Pydantic v2
+            f.write(
+                json.dumps({k: v.model_dump() for k, v in results.items()}, indent=2)
+            )
+        except AttributeError:
+            # Fallback for Pydantic v1
+            f.write(json.dumps({k: v.dict() for k, v in results.items()}, indent=2))
 
     # Create summary of results
-    create_summary(results, results_dir, model)
-    print(f"All experiments completed successfully! Results saved to {results_dir}/")
+    create_summary(results, outcome_dir, model)  # Pass outcome directory as results_dir
+
+    # Generate calibration curves and metrics
+    calibration_metrics = plot_calibration_curves(
+        results=results,
+        y_test=y_test,
+        model_predictions=model_predictions,
+        model_dir=model_dir,
+    )
+
+    print(f"All experiments completed successfully! Results saved to {model_dir}/")
+
+    # Print calibration metrics
+    print("\nCalibration Metrics (Brier Scores, lower is better):")
+    for model_key, brier_score in calibration_metrics.items():
+        print(f"{model_key}: {brier_score:.4f}")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,20 @@
+xgboost M0_PaPaGei_Only - Hypertension Classification Results:
+Best parameters: {'n_estimators': 50}
+Training time: 6.80 seconds
+Accuracy: 0.6374 (CI: 0.6326-0.6417)
+ROC AUC: 0.6820 (CI: 0.6773-0.6871)
+F1 Score: 0.6858 (CI: 0.6811-0.6904)
+
+Classification Report:
+              precision    recall  f1-score   support
+
+         0.0       0.63      0.53      0.57     18931
+         1.0       0.64      0.73      0.69     22230
+
+    accuracy                           0.64     41161
+   macro avg       0.64      0.63      0.63     41161
+weighted avg       0.64      0.64      0.63     41161
+
+Confusion Matrix:
+[[ 9945  8986]
+ [ 5941 16289]]

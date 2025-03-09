@@ -143,7 +143,7 @@ def setup_model(model_type: ModelTypes) -> Tuple[object, Dict]:
             "learning_rate": [0.001, 0.01, 0.05, 0.1, 0.2, 0.3],
             "n_estimators": [50, 100, 200, 300, 500],
             "max_depth": [3, 4, 5, 6, 7, 8, 10],
-            # "min_child_weight": [1, 2, 3, 5, 7, 10],
+            "min_child_weight": [1, 2, 3, 5, 7, 10],
             # "gamma": [0, 0.1, 0.2, 0.3, 0.5, 1.0],
             # "subsample": [0.6, 0.7, 0.8, 0.9, 1.0],
             # "colsample_bytree": [0.6, 0.7, 0.8, 0.9, 1.0],
@@ -282,6 +282,18 @@ def get_embedding_df(embeddings: np.ndarray) -> pd.DataFrame:
 
 
 def create_summary(results: dict, results_dir: str, model: str):
+    """
+    Create a summary of the experiment results.
+
+    Args:
+        results: Dictionary mapping experiment keys to ClassificationResults objects
+        results_dir: Directory to save summary to
+        model: Model type name
+    """
+    # Ensure model type subdirectory exists
+    model_dir = f"{results_dir}/{model}"
+    os.makedirs(model_dir, exist_ok=True)
+
     summary = pd.DataFrame(
         {
             "Model": [
@@ -292,51 +304,148 @@ def create_summary(results: dict, results_dir: str, model: str):
                 "M4: pyPPG + Traditional",
             ],
             "Accuracy": [
-                f"{results['M0']['accuracy']:.4f} ({results['M0']['accuracy_lower_ci']:.4f}-{results['M0']['accuracy_upper_ci']:.4f})",
-                f"{results['M1']['accuracy']:.4f} ({results['M1']['accuracy_lower_ci']:.4f}-{results['M1']['accuracy_upper_ci']:.4f})",
-                f"{results['M2']['accuracy']:.4f} ({results['M2']['accuracy_lower_ci']:.4f}-{results['M2']['accuracy_upper_ci']:.4f})",
-                f"{results['M3']['accuracy']:.4f} ({results['M3']['accuracy_lower_ci']:.4f}-{results['M3']['accuracy_upper_ci']:.4f})",
-                f"{results['M4']['accuracy']:.4f} ({results['M4']['accuracy_lower_ci']:.4f}-{results['M4']['accuracy_upper_ci']:.4f})",
+                f"{results['M0'].accuracy:.4f} ({results['M0'].accuracy_lower_ci:.4f}-{results['M0'].accuracy_upper_ci:.4f})",
+                f"{results['M1'].accuracy:.4f} ({results['M1'].accuracy_lower_ci:.4f}-{results['M1'].accuracy_upper_ci:.4f})",
+                f"{results['M2'].accuracy:.4f} ({results['M2'].accuracy_lower_ci:.4f}-{results['M2'].accuracy_upper_ci:.4f})",
+                f"{results['M3'].accuracy:.4f} ({results['M3'].accuracy_lower_ci:.4f}-{results['M3'].accuracy_upper_ci:.4f})",
+                f"{results['M4'].accuracy:.4f} ({results['M4'].accuracy_lower_ci:.4f}-{results['M4'].accuracy_upper_ci:.4f})",
             ],
             "ROC_AUC": [
-                f"{results['M0']['auc']:.4f} ({results['M0']['auc_lower_ci']:.4f}-{results['M0']['auc_upper_ci']:.4f})",
-                f"{results['M1']['auc']:.4f} ({results['M1']['auc_lower_ci']:.4f}-{results['M1']['auc_upper_ci']:.4f})",
-                f"{results['M2']['auc']:.4f} ({results['M2']['auc_lower_ci']:.4f}-{results['M2']['auc_upper_ci']:.4f})",
-                f"{results['M3']['auc']:.4f} ({results['M3']['auc_lower_ci']:.4f}-{results['M3']['auc_upper_ci']:.4f})",
-                f"{results['M4']['auc']:.4f} ({results['M4']['auc_lower_ci']:.4f}-{results['M4']['auc_upper_ci']:.4f})",
+                f"{results['M0'].auc:.4f} ({results['M0'].auc_lower_ci:.4f}-{results['M0'].auc_upper_ci:.4f})",
+                f"{results['M1'].auc:.4f} ({results['M1'].auc_lower_ci:.4f}-{results['M1'].auc_upper_ci:.4f})",
+                f"{results['M2'].auc:.4f} ({results['M2'].auc_lower_ci:.4f}-{results['M2'].auc_upper_ci:.4f})",
+                f"{results['M3'].auc:.4f} ({results['M3'].auc_lower_ci:.4f}-{results['M3'].auc_upper_ci:.4f})",
+                f"{results['M4'].auc:.4f} ({results['M4'].auc_lower_ci:.4f}-{results['M4'].auc_upper_ci:.4f})",
+            ],
+            "F1": [
+                f"{results['M0'].f1:.4f} ({results['M0'].f1_lower_ci:.4f}-{results['M0'].f1_upper_ci:.4f})",
+                f"{results['M1'].f1:.4f} ({results['M1'].f1_lower_ci:.4f}-{results['M1'].f1_upper_ci:.4f})",
+                f"{results['M2'].f1:.4f} ({results['M2'].f1_lower_ci:.4f}-{results['M2'].f1_upper_ci:.4f})",
+                f"{results['M3'].f1:.4f} ({results['M3'].f1_lower_ci:.4f}-{results['M3'].f1_upper_ci:.4f})",
+                f"{results['M4'].f1:.4f} ({results['M4'].f1_lower_ci:.4f}-{results['M4'].f1_upper_ci:.4f})",
             ],
             "Training_Time": [
-                results["M0"]["training_time"],
-                results["M1"]["training_time"],
-                results["M2"]["training_time"],
-                results["M3"]["training_time"],
-                results["M4"]["training_time"],
+                results["M0"].training_time,
+                results["M1"].training_time,
+                results["M2"].training_time,
+                results["M3"].training_time,
+                results["M4"].training_time,
             ],
         }
     )
 
-    summary.to_csv(f"{results_dir}/experiment_summary_{model}.csv", index=False)
+    summary.to_csv(f"{model_dir}/experiment_summary.csv", index=False)
     print("\nExperiment Summary:")
     print(summary)
 
-    # Plot results comparison
-    plt.figure(figsize=(12, 6))
+    # Plot results comparison with error bars
+    plt.figure(figsize=(15, 6))
 
-    # Bar plot for accuracy
-    plt.subplot(1, 2, 1)
-    plt.bar(summary["Model"], summary["Accuracy"], color="blue")
+    model_names = [f"M{i}" for i in range(5)]
+    x = np.arange(len(model_names))
+    width = 0.25  # width of the bars
+
+    # Extract data for plotting
+    accuracy_values = [results[m].accuracy for m in model_names]
+    accuracy_errors = [
+        (
+            results[m].accuracy - results[m].accuracy_lower_ci,
+            results[m].accuracy_upper_ci - results[m].accuracy,
+        )
+        for m in model_names
+    ]
+    accuracy_errors = np.array(accuracy_errors).T
+
+    auc_values = [results[m].auc for m in model_names]
+    auc_errors = [
+        (
+            results[m].auc - results[m].auc_lower_ci,
+            results[m].auc_upper_ci - results[m].auc,
+        )
+        for m in model_names
+    ]
+    auc_errors = np.array(auc_errors).T
+
+    f1_values = [results[m].f1 for m in model_names]
+    f1_errors = [
+        (results[m].f1 - results[m].f1_lower_ci, results[m].f1_upper_ci - results[m].f1)
+        for m in model_names
+    ]
+    f1_errors = np.array(f1_errors).T
+
+    # Plot metrics with error bars
+    plt.subplot(1, 3, 1)
+    bars = plt.bar(
+        x, accuracy_values, width, color="blue", yerr=accuracy_errors, capsize=5
+    )
     plt.ylabel("Accuracy")
-    plt.title("Accuracy Comparison")
-    plt.xticks(rotation=45, ha="right")
-    plt.tight_layout()
+    plt.title("Accuracy with 95% CI")
+    plt.xticks(x, [f"M{i}" for i in range(5)])
 
-    # Bar plot for ROC AUC
-    plt.subplot(1, 2, 2)
-    plt.bar(summary["Model"], summary["ROC_AUC"], color="orange")
+    # Add value labels above each bar
+    for bar in bars:
+        height = bar.get_height()
+        plt.text(
+            bar.get_x() + bar.get_width() / 2.0,
+            height + 0.01,
+            f"{height:.2f}",
+            ha="center",
+            va="bottom",
+            fontsize=9,
+        )
+
+    plt.subplot(1, 3, 2)
+    bars = plt.bar(x, auc_values, width, color="orange", yerr=auc_errors, capsize=5)
     plt.ylabel("ROC AUC")
-    plt.title("ROC AUC Comparison")
-    plt.xticks(rotation=45, ha="right")
-    plt.tight_layout()
+    plt.title("AUC with 95% CI")
+    plt.xticks(x, [f"M{i}" for i in range(5)])
 
-    plt.savefig(f"{results_dir}/experiment_comparison.png")
+    # Add value labels above each bar
+    for bar in bars:
+        height = bar.get_height()
+        plt.text(
+            bar.get_x() + bar.get_width() / 2.0,
+            height + 0.01,
+            f"{height:.2f}",
+            ha="center",
+            va="bottom",
+            fontsize=9,
+        )
+
+    plt.subplot(1, 3, 3)
+    bars = plt.bar(x, f1_values, width, color="green", yerr=f1_errors, capsize=5)
+    plt.ylabel("F1 Score")
+    plt.title("F1 Score with 95% CI")
+    plt.xticks(x, [f"M{i}" for i in range(5)])
+
+    # Add value labels above each bar
+    for bar in bars:
+        height = bar.get_height()
+        plt.text(
+            bar.get_x() + bar.get_width() / 2.0,
+            height + 0.01,
+            f"{height:.2f}",
+            ha="center",
+            va="bottom",
+            fontsize=9,
+        )
+
+    plt.tight_layout()
+    plt.savefig(f"{model_dir}/experiment_comparison.png")
+    plt.close()
+
+    # Add a legend explaining the model names
+    plt.figure(figsize=(10, 2))
+    plt.axis("off")
+    legend_text = "\n".join(
+        [
+            "M0: PaPaGei Only",
+            "M1: Traditional Factors (age, sex, BMI)",
+            "M2: PaPaGei + Traditional",
+            "M3: pyPPG Only",
+            "M4: pyPPG + Traditional",
+        ]
+    )
+    plt.text(0.5, 0.5, legend_text, ha="center", va="center", fontsize=12)
+    plt.savefig(f"{model_dir}/model_legend.png", bbox_inches="tight")
     plt.close()
