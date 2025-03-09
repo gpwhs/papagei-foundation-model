@@ -1,3 +1,0 @@
-results_directory : ./experiment_results/MACE/
-model : xgboost
-outcome : MACE

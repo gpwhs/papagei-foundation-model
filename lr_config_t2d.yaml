@@ -1,4 +1,4 @@
-results_directory: ./experiment_results/Hypertension/
+results_directory: ./experiment_results/T2DM/
 model: LR
 outcome: T2DM
 
