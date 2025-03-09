@@ -211,7 +211,7 @@ def train_and_evaluate_model(
         model,
         param_distributions=parameter_distributions,
         n_iter=60,
-        cv=1,
+        cv=2,
         scoring="roc_auc",
         return_train_score=True,
         n_jobs=-1,
