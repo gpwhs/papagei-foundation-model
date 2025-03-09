@@ -1,0 +1,3 @@
+results_directory: ./experiment_results/T2DM/
+model: xgboost
+outcome: T2DM

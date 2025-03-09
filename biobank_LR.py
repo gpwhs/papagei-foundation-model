@@ -133,7 +133,6 @@ def setup_experiments(
     """Set up experiment configurations.
 
     Args:
-        X: Feature DataFrame
         embedding_columns: List of embedding column names
         traditional_features: List of traditional feature names
 
@@ -167,6 +166,257 @@ def setup_experiments(
             feature_columns=PYPPG_FEATURES + traditional_features,
         ),
     }
+
+
+def plot_learning_curves(
+    model: Any,
+    X_train: np.ndarray,
+    y_train: np.ndarray,
+    X_test: np.ndarray,
+    y_test: np.ndarray,
+    model_type: str,
+    model_name: str,
+    output_dir: str = "results",
+) -> None:
+    """
+    Plot learning curves for the model.
+
+    Args:
+        model: Trained model
+        X_train: Training features
+        y_train: Training labels
+        X_test: Testing features
+        y_test: Testing labels
+        model_type: Type of model (e.g., "LR", "xgboost")
+        model_name: Name of the model for saving outputs
+        output_dir: Directory to save results
+
+    Returns:
+        None: Saves learning curve plots to disk
+    """
+    # This function only works for XGBoost models
+    if model_type != ModelTypes.XGBOOST.value:
+        return
+
+    try:
+        import xgboost as xgb
+
+        # Check if the model is an XGBoost model
+        if not isinstance(model, xgb.XGBModel):
+            print(
+                f"Expected XGBoost model but got {type(model)}. Cannot plot learning curves."
+            )
+            return
+
+        # Get evaluation results if they exist
+        if not hasattr(model, "evals_result_"):
+            print(
+                "Model does not have evaluation results. Cannot plot learning curves."
+            )
+            return
+
+        evals_result = model.evals_result_
+
+        # If we have test evaluation results, we can plot curves
+        if "validation_0" in evals_result:
+            plt.figure(figsize=(12, 5))
+
+            metrics = list(evals_result["validation_0"].keys())
+
+            for i, metric in enumerate(metrics):
+                plt.subplot(1, len(metrics), i + 1)
+
+                if "train" in evals_result:
+                    x_axis = range(len(evals_result["train"][metric]))
+                    plt.plot(x_axis, evals_result["train"][metric], label="Train")
+
+                x_axis = range(len(evals_result["validation_0"][metric]))
+                plt.plot(x_axis, evals_result["validation_0"][metric], label="Test")
+
+                plt.title(f"XGBoost {metric.upper()}")
+                plt.xlabel("Boosting Rounds")
+                plt.ylabel(metric.upper())
+                plt.legend()
+
+            plt.tight_layout()
+            plt.savefig(f"{output_dir}/{model_type}_{model_name}_learning_curves.png")
+            plt.close()
+
+            print(
+                f"Learning curves saved to {output_dir}/{model_type}_{model_name}_learning_curves.png"
+            )
+        else:
+            # If no validation results, we'll use a modified approach by training a new model
+            # with the same parameters but tracking the training
+            print(
+                "Model does not have validation results. Training a new model to generate learning curves..."
+            )
+
+            # Extract parameters from the existing model
+            params = model.get_params()
+
+            # Remove parameters that aren't used by the XGBoost native API
+            native_params = {
+                k: v
+                for k, v in params.items()
+                if k
+                not in [
+                    "verbose",
+                    "n_jobs",
+                    "random_state",
+                    "use_label_encoder",
+                    "n_estimators",
+                ]
+            }
+
+            # Convert parameter names to XGBoost native format
+            xgb_params = {}
+            for k, v in native_params.items():
+                if k == "reg_alpha":
+                    xgb_params["alpha"] = v
+                elif k == "reg_lambda":
+                    xgb_params["lambda"] = v
+                elif k == "learning_rate":
+                    xgb_params["eta"] = v
+                else:
+                    xgb_params[k] = v
+
+            xgb_params["objective"] = "binary:logistic"
+            xgb_params["eval_metric"] = ["logloss", "auc"]
+            xgb_params["seed"] = 42
+
+            # Create DMatrix objects for training
+            dtrain = xgb.DMatrix(X_train, label=y_train)
+            dtest = xgb.DMatrix(X_test, label=y_test)
+
+            # Train with tracking
+            evals_result = {}
+            xgb.train(
+                params=xgb_params,
+                dtrain=dtrain,
+                num_boost_round=params.get("n_estimators", 100),
+                evals=[(dtrain, "train"), (dtest, "validation")],
+                evals_result=evals_result,
+                verbose_eval=False,
+            )
+
+            # Plot the learning curves
+            plt.figure(figsize=(12, 5))
+
+            metrics = list(evals_result["validation"].keys())
+
+            for i, metric in enumerate(metrics):
+                plt.subplot(1, len(metrics), i + 1)
+
+                x_axis = range(len(evals_result["train"][metric]))
+                plt.plot(x_axis, evals_result["train"][metric], label="Train")
+
+                x_axis = range(len(evals_result["validation"][metric]))
+                plt.plot(x_axis, evals_result["validation"][metric], label="Test")
+
+                plt.title(f"XGBoost {metric.upper()}")
+                plt.xlabel("Boosting Rounds")
+                plt.ylabel(metric.upper())
+                plt.legend()
+
+            plt.tight_layout()
+            plt.savefig(f"{output_dir}/{model_type}_{model_name}_learning_curves.png")
+            plt.close()
+
+            print(
+                f"Learning curves saved to {output_dir}/{model_type}_{model_name}_learning_curves.png"
+            )
+
+    except ImportError:
+        print("XGBoost package not installed. Skipping learning curves.")
+    except Exception as e:
+        print(f"Error generating learning curves: {e}")
+        import traceback
+
+        traceback.print_exc()
+
+
+def explain_model_predictions(
+    model: Any,
+    X_test: pd.DataFrame,
+    y_test: pd.Series,
+    model_type: str,
+    model_name: str,
+    output_dir: str = "results",
+    num_samples: int = 5,
+) -> None:
+    """
+    Generate SHAP values to explain model predictions for individual samples.
+
+    Args:
+        model: Trained model
+        X_test: Test features
+        y_test: Test labels
+        model_type: Type of model (e.g., "LR", "xgboost")
+        model_name: Name of the model for saving outputs
+        output_dir: Directory to save results
+        num_samples: Number of random samples to explain
+    """
+    try:
+        import shap
+
+        print(f"Generating SHAP explanations for {model_name}...")
+
+        # Create model-specific explainer
+        if model_type == ModelTypes.XGBOOST.value:
+            explainer = shap.Explainer(model)
+        elif model_type == ModelTypes.LOGISTIC_REGRESSION.value:
+            # For linear models, we use a different explainer
+            explainer = shap.LinearExplainer(model, X_test)
+        else:
+            print(f"SHAP explanations not implemented for model type: {model_type}")
+            return
+
+        # Select random samples
+        indices = np.random.choice(len(X_test), size=num_samples, replace=False)
+        X_samples = X_test.iloc[indices]
+        y_samples = y_test.iloc[indices]
+
+        # Get SHAP values
+        shap_values = explainer(X_samples)
+
+        # Plot SHAP values for each sample
+        for i in range(num_samples):
+            plt.figure(figsize=(12, 6))
+            shap.plots.waterfall(shap_values[i], max_display=10, show=False)
+            plt.title(
+                f"Sample {i+1} - True Label: {y_samples.iloc[i]}, Predicted: {model.predict(X_samples.iloc[[i]])[0]}"
+            )
+            plt.tight_layout()
+            plt.savefig(f"{output_dir}/{model_type}_{model_name}_shap_sample_{i+1}.png")
+            plt.close()
+
+        # Create summary plot for all test data
+        # Use a sample of 100 instances for better visualization
+        sample_size = min(100, len(X_test))
+        sample_indices = np.random.choice(len(X_test), size=sample_size, replace=False)
+        X_for_summary = X_test.iloc[sample_indices]
+
+        shap_values_summary = explainer(X_for_summary)
+
+        # Bar summary plot
+        plt.figure(figsize=(10, 8))
+        shap.plots.bar(shap_values_summary, show=False)
+        plt.title(f"{model_name} - SHAP Feature Importance")
+        plt.tight_layout()
+        plt.savefig(f"{output_dir}/{model_type}_{model_name}_shap_importance.png")
+        plt.close()
+
+        # Beeswarm summary plot
+        plt.figure(figsize=(10, 8))
+        shap.plots.beeswarm(shap_values_summary, show=False)
+        plt.title(f"{model_name} - SHAP Summary Plot")
+        plt.tight_layout()
+        plt.savefig(f"{output_dir}/{model_type}_{model_name}_shap_summary.png")
+        plt.close()
+
+    except ImportError:
+        print("SHAP package not installed. Skipping model explanation.")
 
 
 def train_and_evaluate_model(
@@ -301,15 +551,37 @@ def train_and_evaluate_model(
         output_dir=output_dir,
     )
 
-    # Feature importance (if applicable)
-    if model_type == "LR":
-        save_feature_importance(
-            model=best_model,
-            feature_names=X_train.columns,
-            model_type=model_type,
-            model_name=model_name,
-            output_dir=output_dir,
+    # Feature importance (for applicable models)
+    save_feature_importance(
+        model=best_model,
+        feature_names=X_train.columns,
+        model_type=model_type,
+        model_name=model_name,
+        output_dir=output_dir,
+    )
+
+    # Plot learning curves (for XGBoost)
+    if model_type == ModelTypes.XGBOOST.value:
+        plot_learning_curves(
+            best_model,
+            X_train_scaled,
+            y_train,
+            X_test_scaled,
+            y_test,
+            model_type,
+            model_name,
+            output_dir,
         )
+
+    # Generate SHAP explanations
+    explain_model_predictions(
+        best_model,
+        X_test,
+        y_test,
+        model_type,
+        model_name,
+        output_dir,
+    )
 
     # Return results
     return ClassificationResults(
@@ -419,37 +691,73 @@ def save_feature_importance(
     """Save feature importance for a model.
 
     Args:
-        model: Trained model with coefficients
+        model: Trained model with feature importance
         feature_names: Names of features
         model_type: Type of model
         model_name: Name of model
         output_dir: Directory to save results
     """
-    feature_importance = np.abs(model.coef_[0])
+    model_dir = f"{output_dir}/{model_type}"
+    os.makedirs(model_dir, exist_ok=True)
 
-    # Create DataFrame for feature importance
-    coef_df = pd.DataFrame({"feature": feature_names, "coefficient": model.coef_[0]})
-    coef_df["abs_coefficient"] = coef_df["coefficient"].abs()
-    coef_df = coef_df.sort_values(by="abs_coefficient", ascending=False)
+    # Model-specific handling of feature importance
+    if model_type == ModelTypes.LOGISTIC_REGRESSION.value:
+        # For logistic regression, use coefficients
+        feature_importance = np.abs(model.coef_[0])
 
-    # Save top features to file
-    coef_df.to_csv(
-        f"{output_dir}/{model_type}_{model_name}_feature_importance.csv",
-        index=False,
-    )
+        # Create DataFrame for feature importance
+        coef_df = pd.DataFrame(
+            {"feature": feature_names, "coefficient": model.coef_[0]}
+        )
+        coef_df["abs_coefficient"] = coef_df["coefficient"].abs()
+        coef_df = coef_df.sort_values(by="abs_coefficient", ascending=False)
+
+        # Save to file
+        coef_df.to_csv(
+            f"{model_dir}/{model_name}_feature_importance.csv",
+            index=False,
+        )
+
+        # Plot feature importance
+        importance_name = "Feature Coefficient (absolute value)"
+        importance_values = feature_importance
+
+    elif model_type == ModelTypes.XGBOOST.value:
+        # For XGBoost, use feature_importances_
+        feature_importance = model.feature_importances_
+
+        # Create DataFrame for feature importance
+        importance_df = pd.DataFrame(
+            {"feature": feature_names, "importance": feature_importance}
+        )
+        importance_df = importance_df.sort_values(by="importance", ascending=False)
+
+        # Save to file
+        importance_df.to_csv(
+            f"{model_dir}/{model_name}_feature_importance.csv",
+            index=False,
+        )
+
+        # Plot feature importance
+        importance_name = "Feature Importance"
+        importance_values = feature_importance
+
+    else:
+        print(f"Feature importance not implemented for model type: {model_type}")
+        return
 
     # Plot top 20 features or all if less than 20
     num_features = min(20, len(feature_names))
     plt.figure(figsize=(12, 8))
-    sorted_idx = np.argsort(feature_importance)[::-1]
+    sorted_idx = np.argsort(importance_values)[::-1]
     top_features = sorted_idx[:num_features]
 
-    plt.barh(range(len(top_features)), feature_importance[top_features], align="center")
+    plt.barh(range(len(top_features)), importance_values[top_features], align="center")
     plt.yticks(range(len(top_features)), [feature_names[i] for i in top_features])
-    plt.xlabel("Feature Importance")
+    plt.xlabel(importance_name)
     plt.title(f"{model_type} {model_name} - Top {num_features} Features for Detection")
     plt.tight_layout()
-    plt.savefig(f"{output_dir}/{model_type}_{model_name}_feature_importance.png")
+    plt.savefig(f"{model_dir}/{model_name}_feature_importance.png")
     plt.close()
 
 
