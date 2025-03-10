@@ -1,3 +1,5 @@
+from scipy import stats
+import statsmodels.api as sm
 import os
 import time
 import argparse
@@ -22,7 +24,7 @@ from sklearn.model_selection import train_test_split, RandomizedSearchCV
 from sklearn.preprocessing import StandardScaler
 from tqdm import tqdm
 
-from biobank_embeddings_extraction import extract_features
+from biobank_embeddings_extraction import get_embeddings
 from linearprobing.utils import bootstrap_metric_confidence_interval
 from biobank_utils import (
     load_yaml_config,
@@ -87,7 +89,7 @@ def plot_calibration_curves(
     Returns:
         Dictionary of calibration metrics (Brier scores) for each model
     """
-    from sklearn.calibration import calibration_curve, CalibrationDisplay
+    from sklearn.calibration import calibration_curve
     from sklearn.metrics import brier_score_loss
 
     plt.figure(figsize=(12, 9))
@@ -301,31 +303,6 @@ def compute_expected_calibration_error(
         ece_values[model_key] = ece
 
     return ece_values
-
-
-def get_embeddings(df: pd.DataFrame, cache_file: str = "embeddings.npy") -> np.ndarray:
-    """Get or compute embeddings with caching.
-
-    Args:
-        df: DataFrame containing the PPG data
-        cache_file: File to cache embeddings to/from
-
-    Returns:
-        Array of embeddings
-    """
-    if os.path.exists(cache_file):
-        print(f"Loading pre-computed embeddings from {cache_file}")
-        return np.load(cache_file)
-
-    print("Extracting features...")
-    embeddings = extract_features(df)
-
-    # Create directory if it doesn't exist
-    os.makedirs(os.path.dirname(cache_file) or ".", exist_ok=True)
-    np.save(cache_file, embeddings)
-    print(f"Embeddings saved to {cache_file}")
-
-    return embeddings
 
 
 def preprocess_data(
@@ -669,6 +646,72 @@ def explain_model_predictions(
         traceback.print_exc()
 
 
+def plot_odds_ratios(
+    model,
+    X,
+    y,
+    feature_names=None,
+    title="Odds Ratios with 95% CI",
+    filename="odds_ratios.png",
+):
+    """
+    Plot Odds Ratios (ORs) and 95% Confidence Intervals from a trained logistic regression model.
+
+    Parameters:
+    - model: sklearn LogisticRegression (fitted)
+    - X: ndarray or DataFrame of shape (n_samples, n_features)
+    - y: ndarray of shape (n_samples,)
+    - feature_names: list of strings (feature names)
+    - title: title of the plot
+    """
+    if feature_names is None:
+        feature_names = [f"Feature {i}" for i in range(X.shape[1])]
+
+    # Fit logistic regression using statsmodels for easy CI extraction
+    X_sm = sm.add_constant(X)
+    sm_model = sm.Logit(y, X_sm).fit(disp=False)
+
+    # Extract odds ratios and confidence intervals
+    params = sm_model.params[1:]  # Exclude intercept
+    conf = sm_model.conf_int()[1:]
+    or_vals = np.exp(params)
+    or_lower = np.exp(conf[0])
+    or_upper = np.exp(conf[1])
+
+    # Prepare DataFrame for easier plotting
+    df_or = pd.DataFrame(
+        {
+            "Feature": feature_names,
+            "OddsRatio": or_vals,
+            "CI_lower": or_lower,
+            "CI_upper": or_upper,
+        }
+    ).sort_values(by="OddsRatio", ascending=True)
+
+    # Plotting
+    fig, ax = plt.subplots(figsize=(8, len(feature_names) * 0.5))
+    ax.errorbar(
+        df_or["OddsRatio"],
+        df_or["Feature"],
+        xerr=[
+            df_or["OddsRatio"] - df_or["CI_lower"],
+            df_or["CI_upper"] - df_or["OddsRatio"],
+        ],
+        fmt="o",
+        color="navy",
+        ecolor="gray",
+        elinewidth=3,
+        capsize=4,
+    )
+
+    ax.axvline(x=1, linestyle="--", color="red", linewidth=1)
+    ax.set_xscale("log")
+    ax.set_xlabel("Odds Ratio (log scale)")
+    ax.set_title(title)
+    plt.tight_layout()
+    plt.savefig(filename)
+
+
 def train_and_evaluate_model(
     X_train: pd.DataFrame,
     X_test: pd.DataFrame,
@@ -746,13 +789,18 @@ def train_and_evaluate_model(
                 # Handle list of dictionaries (like for LogisticRegression)
                 for param_dict in parameter_distributions:
                     if "scale_pos_weight" not in param_dict:
-                        param_dict["scale_pos_weight"] = [1, scale_pos_weight]
+                        param_dict["scale_pos_weight"] = [1, 10, 20, scale_pos_weight]
             else:
                 # Handle dictionary
                 if "scale_pos_weight" not in parameter_distributions:
-                    parameter_distributions["scale_pos_weight"] = [1, scale_pos_weight]
+                    parameter_distributions["scale_pos_weight"] = [
+                        1,
+                        10,
+                        20,
+                        scale_pos_weight,
+                    ]
 
-            print(f"Set scale_pos_weight options: [1, {scale_pos_weight:.2f}]")
+            print(f"Set scale_pos_weight options: [1, 10, 20, {scale_pos_weight:.2f}]")
 
         # For Logistic Regression, we always include class_weight parameter
         elif model_type == ModelTypes.LOGISTIC_REGRESSION.value:
@@ -937,6 +985,17 @@ def train_and_evaluate_model(
         accuracy_upper_ci=accuracy_ci_upper,
         training_time=training_time,
     )
+
+    if model_type == ModelTypes.LOGISTIC_REGRESSION.value:
+        # Create odds ratio forest plot for logistic regression
+        plot_odds_ratios(
+            best_model,
+            X_train_scaled,
+            y_train,
+            feature_names=X_train.columns,
+            title=f"{model_name} - Odds Ratios with 95% CI",
+            filename=f"{model_output_dir}/{model_name}_odds_ratios.png",
+        )
 
     if collect_predictions:
         return results, y_pred_proba

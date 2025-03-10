@@ -1,8 +1,9 @@
 xgboost M3_pyPPG_Only - MACE_5y Classification Results:
-Best parameters: {'n_estimators': 50, 'min_child_weight': 7, 'max_depth': 7, 'learning_rate': 0.01}
-Training time: 109.54 seconds
-Accuracy: 0.9741 (CI: 0.9727-0.9755)
-ROC AUC: 0.5038 (CI: 0.4881-0.5212)
+Best parameters: {'scale_pos_weight': 1, 'n_estimators': 100, 'min_child_weight': 7, 'max_depth': 7, 'learning_rate': 0.001}
+Training time: 119.01 seconds
+Accuracy: 0.9741 (CI: 0.9726-0.9755)
+ROC AUC: 0.5066 (CI: 0.4908-0.5237)
+PR AUC: 0.0270 (CI: 0.0247-0.0298)
 F1 Score: 0.0000 (CI: 0.0000-0.0000)
 
 Classification Report:

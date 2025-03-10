@@ -158,47 +158,55 @@ def setup_model(model_type: ModelTypes) -> Tuple[object, Dict]:
 
         model = LogisticRegression(max_iter=1000, random_state=42)
         param_distributions = []
-
-        # L1 penalty
         param_distributions.append(
             {
-                "C": loguniform(1e-4, 1e3),
+                "C": [0.5],
                 "penalty": ["l1"],
                 "solver": ["liblinear"],  # Best solver for L1
-                "class_weight": ["balanced", None],
+                "class_weight": ["balanced"],
             }
         )
 
-        # L2 penalty
-        param_distributions.append(
-            {
-                "C": loguniform(1e-4, 1e3),
-                "penalty": ["l2"],
-                "solver": ["lbfgs"],  # Efficient solver for L2
-                "class_weight": ["balanced", None],
-            }
-        )
-
-        # Elasticnet penalty
-        param_distributions.append(
-            {
-                "C": loguniform(1e-4, 1e3),
-                "penalty": ["elasticnet"],
-                "solver": ["saga"],  # Only solver for elasticnet
-                "l1_ratio": uniform(0, 1),
-                "class_weight": ["balanced", None],
-            }
-        )
-
-        # No penalty
-        param_distributions.append(
-            {
-                "C": loguniform(1e-4, 1e3),
-                "penalty": ["none"],
-                "solver": ["lbfgs"],  # Efficient when no penalty
-                "class_weight": ["balanced", None],
-            }
-        )
+        # # L1 penalty
+        # param_distributions.append(
+        #     {
+        #         "C": loguniform(1e-4, 1e3),
+        #         "penalty": ["l1"],
+        #         "solver": ["liblinear"],  # Best solver for L1
+        #         "class_weight": ["balanced", None],
+        #     }
+        # )
+        #
+        # # L2 penalty
+        # param_distributions.append(
+        #     {
+        #         "C": loguniform(1e-4, 1e3),
+        #         "penalty": ["l2"],
+        #         "solver": ["lbfgs"],  # Efficient solver for L2
+        #         "class_weight": ["balanced", None],
+        #     }
+        # )
+        #
+        # # Elasticnet penalty
+        # param_distributions.append(
+        #     {
+        #         "C": loguniform(1e-4, 1e3),
+        #         "penalty": ["elasticnet"],
+        #         "solver": ["saga"],  # Only solver for elasticnet
+        #         "l1_ratio": uniform(0, 1),
+        #         "class_weight": ["balanced", None],
+        #     }
+        # )
+        #
+        # # No penalty
+        # param_distributions.append(
+        #     {
+        #         "C": loguniform(1e-4, 1e3),
+        #         "penalty": ["none"],
+        #         "solver": ["lbfgs"],  # Efficient when no penalty
+        #         "class_weight": ["balanced", None],
+        #     }
+        # )
         return model, param_distributions
 
     raise ValueError(f"Unsupported model type: {model_type}")

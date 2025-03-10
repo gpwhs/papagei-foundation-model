@@ -1,4 +1,5 @@
 import os
+import pandas as pd
 from torch_ecg._preprocessors import Normalize
 import numpy as np
 import torch
@@ -172,3 +173,36 @@ def extract_features(df):
 
     np.save(embeddings_file, embeddings)
     return np.array(embeddings)
+
+
+def get_embeddings(df: pd.DataFrame, cache_file: str = "embeddings.npy") -> np.ndarray:
+    """Get or compute embeddings with caching.
+
+    Args:
+        df: DataFrame containing the PPG data
+        cache_file: File to cache embeddings to/from
+
+    Returns:
+        Array of embeddings
+    """
+    if os.path.exists(cache_file):
+        print(f"Loading pre-computed embeddings from {cache_file}")
+        return np.load(cache_file)
+
+    print("Extracting features...")
+    embeddings = extract_features(df)
+
+    # Create directory if it doesn't exist
+    os.makedirs(os.path.dirname(cache_file) or ".", exist_ok=True)
+    np.save(cache_file, embeddings)
+    print(f"Embeddings saved to {cache_file}")
+
+    return embeddings
+
+
+def get_embedding_df(embeddings: np.ndarray) -> pd.DataFrame:
+    """
+    Get the column names for the embeddings.
+    """
+    embedding_cols = [f"emb_{i}" for i in range(embeddings.shape[1])]
+    return pd.DataFrame(embeddings, columns=embedding_cols)
