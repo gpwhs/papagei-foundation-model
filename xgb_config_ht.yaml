@@ -1,4 +1,5 @@
 results_directory: ./experiment_results/Hypertension/
 model: xgboost
 outcome: Hypertension
+handle_imbalance: False
 

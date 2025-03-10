@@ -317,6 +317,13 @@ def create_summary(results: dict, results_dir: str, model: str):
                 f"{results['M3'].auc:.4f} ({results['M3'].auc_lower_ci:.4f}-{results['M3'].auc_upper_ci:.4f})",
                 f"{results['M4'].auc:.4f} ({results['M4'].auc_lower_ci:.4f}-{results['M4'].auc_upper_ci:.4f})",
             ],
+            "PR_AUC": [
+                f"{results['M0'].aucpr:.4f} ({results['M0'].aucpr_lower_ci:.4f}-{results['M0'].aucpr_upper_ci:.4f})",
+                f"{results['M1'].aucpr:.4f} ({results['M1'].aucpr_lower_ci:.4f}-{results['M1'].aucpr_upper_ci:.4f})",
+                f"{results['M2'].aucpr:.4f} ({results['M2'].aucpr_lower_ci:.4f}-{results['M2'].aucpr_upper_ci:.4f})",
+                f"{results['M3'].aucpr:.4f} ({results['M3'].aucpr_lower_ci:.4f}-{results['M3'].aucpr_upper_ci:.4f})",
+                f"{results['M4'].aucpr:.4f} ({results['M4'].aucpr_lower_ci:.4f}-{results['M4'].aucpr_upper_ci:.4f})",
+            ],
             "F1": [
                 f"{results['M0'].f1:.4f} ({results['M0'].f1_lower_ci:.4f}-{results['M0'].f1_upper_ci:.4f})",
                 f"{results['M1'].f1:.4f} ({results['M1'].f1_lower_ci:.4f}-{results['M1'].f1_upper_ci:.4f})",
@@ -339,11 +346,11 @@ def create_summary(results: dict, results_dir: str, model: str):
     print(summary)
 
     # Plot results comparison with error bars
-    plt.figure(figsize=(15, 6))
+    plt.figure(figsize=(20, 6))
 
     model_names = [f"M{i}" for i in range(5)]
     x = np.arange(len(model_names))
-    width = 0.25  # width of the bars
+    width = 0.2  # width of the bars - smaller for 4 metrics
 
     # Extract data for plotting
     accuracy_values = [results[m].accuracy for m in model_names]
@@ -366,6 +373,16 @@ def create_summary(results: dict, results_dir: str, model: str):
     ]
     auc_errors = np.array(auc_errors).T
 
+    pr_auc_values = [results[m].aucpr for m in model_names]
+    pr_auc_errors = [
+        (
+            results[m].aucpr - results[m].aucpr_lower_ci,
+            results[m].aucpr_upper_ci - results[m].aucpr,
+        )
+        for m in model_names
+    ]
+    pr_auc_errors = np.array(pr_auc_errors).T
+
     f1_values = [results[m].f1 for m in model_names]
     f1_errors = [
         (results[m].f1 - results[m].f1_lower_ci, results[m].f1_upper_ci - results[m].f1)
@@ -374,9 +391,14 @@ def create_summary(results: dict, results_dir: str, model: str):
     f1_errors = np.array(f1_errors).T
 
     # Plot metrics with error bars
-    plt.subplot(1, 3, 1)
+    plt.subplot(1, 4, 1)
     bars = plt.bar(
-        x, accuracy_values, width, color="blue", yerr=accuracy_errors, capsize=5
+        x - width * 1.5,
+        accuracy_values,
+        width,
+        color="blue",
+        yerr=accuracy_errors,
+        capsize=5,
     )
     plt.ylabel("Accuracy")
     plt.title("Accuracy with 95% CI")
@@ -394,10 +416,12 @@ def create_summary(results: dict, results_dir: str, model: str):
             fontsize=9,
         )
 
-    plt.subplot(1, 3, 2)
-    bars = plt.bar(x, auc_values, width, color="orange", yerr=auc_errors, capsize=5)
+    plt.subplot(1, 4, 2)
+    bars = plt.bar(
+        x - width / 2, auc_values, width, color="orange", yerr=auc_errors, capsize=5
+    )
     plt.ylabel("ROC AUC")
-    plt.title("AUC with 95% CI")
+    plt.title("ROC AUC with 95% CI")
     plt.xticks(x, [f"M{i}" for i in range(5)])
 
     # Add value labels above each bar
@@ -412,8 +436,35 @@ def create_summary(results: dict, results_dir: str, model: str):
             fontsize=9,
         )
 
-    plt.subplot(1, 3, 3)
-    bars = plt.bar(x, f1_values, width, color="green", yerr=f1_errors, capsize=5)
+    plt.subplot(1, 4, 3)
+    bars = plt.bar(
+        x + width / 2,
+        pr_auc_values,
+        width,
+        color="purple",
+        yerr=pr_auc_errors,
+        capsize=5,
+    )
+    plt.ylabel("PR AUC")
+    plt.title("PR AUC with 95% CI")
+    plt.xticks(x, [f"M{i}" for i in range(5)])
+
+    # Add value labels above each bar
+    for bar in bars:
+        height = bar.get_height()
+        plt.text(
+            bar.get_x() + bar.get_width() / 2.0,
+            height + 0.01,
+            f"{height:.2f}",
+            ha="center",
+            va="bottom",
+            fontsize=9,
+        )
+
+    plt.subplot(1, 4, 4)
+    bars = plt.bar(
+        x + width * 1.5, f1_values, width, color="green", yerr=f1_errors, capsize=5
+    )
     plt.ylabel("F1 Score")
     plt.title("F1 Score with 95% CI")
     plt.xticks(x, [f"M{i}" for i in range(5)])

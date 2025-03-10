@@ -1,3 +1,4 @@
 results_directory: ./experiment_results/MACE10Y/
 model: LR 
-outcome: MACE_10Y 
+outcome: MACE_10y 
+handle_imbalance: True

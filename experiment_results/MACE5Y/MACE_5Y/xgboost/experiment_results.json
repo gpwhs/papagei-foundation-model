@@ -1,0 +1,97 @@
+{
+  "M0": {
+    "model": "xgboost",
+    "parameters": {
+      "n_estimators": 100,
+      "min_child_weight": 1,
+      "max_depth": 3,
+      "learning_rate": 0.1
+    },
+    "auc": 0.6065161025865633,
+    "auc_lower_ci": 0.5896505545379626,
+    "auc_upper_ci": 0.6239137934858051,
+    "f1": 0.0,
+    "f1_lower_ci": 0.0,
+    "f1_upper_ci": 0.0,
+    "accuracy": 0.9741016982094701,
+    "accuracy_lower_ci": 0.9726913826194699,
+    "accuracy_upper_ci": 0.9757665022715678,
+    "training_time": 197.1486849784851
+  },
+  "M1": {
+    "model": "xgboost",
+    "parameters": {
+      "n_estimators": 500,
+      "min_child_weight": 3,
+      "max_depth": 4,
+      "learning_rate": 0.01
+    },
+    "auc": 0.7008161783681205,
+    "auc_lower_ci": 0.6865863033610328,
+    "auc_upper_ci": 0.7167563819537254,
+    "f1": 0.0,
+    "f1_lower_ci": 0.0,
+    "f1_upper_ci": 0.0,
+    "accuracy": 0.9741016982094701,
+    "accuracy_lower_ci": 0.972555938874177,
+    "accuracy_upper_ci": 0.9756577828527003,
+    "training_time": 19.483383178710938
+  },
+  "M2": {
+    "model": "xgboost",
+    "parameters": {
+      "n_estimators": 100,
+      "min_child_weight": 1,
+      "max_depth": 3,
+      "learning_rate": 0.1
+    },
+    "auc": 0.7131910212307683,
+    "auc_lower_ci": 0.698164620787517,
+    "auc_upper_ci": 0.7296666973091861,
+    "f1": 0.0,
+    "f1_lower_ci": 0.0,
+    "f1_upper_ci": 0.0,
+    "accuracy": 0.9741016982094701,
+    "accuracy_lower_ci": 0.9726440076771702,
+    "accuracy_upper_ci": 0.9756207332183378,
+    "training_time": 321.3741629123688
+  },
+  "M3": {
+    "model": "xgboost",
+    "parameters": {
+      "n_estimators": 50,
+      "min_child_weight": 7,
+      "max_depth": 7,
+      "learning_rate": 0.01
+    },
+    "auc": 0.5038206749588864,
+    "auc_lower_ci": 0.4880794468776402,
+    "auc_upper_ci": 0.5212465091273661,
+    "f1": 0.0,
+    "f1_lower_ci": 0.0,
+    "f1_upper_ci": 0.0,
+    "accuracy": 0.9741016982094701,
+    "accuracy_lower_ci": 0.9726798425694224,
+    "accuracy_upper_ci": 0.9755350938995652,
+    "training_time": 109.53693294525146
+  },
+  "M4": {
+    "model": "xgboost",
+    "parameters": {
+      "n_estimators": 500,
+      "min_child_weight": 3,
+      "max_depth": 4,
+      "learning_rate": 0.01
+    },
+    "auc": 0.6979997201767754,
+    "auc_lower_ci": 0.6830065493899908,
+    "auc_upper_ci": 0.715029921706008,
+    "f1": 0.0,
+    "f1_lower_ci": 0.0,
+    "f1_upper_ci": 0.0,
+    "accuracy": 0.9741016982094701,
+    "accuracy_lower_ci": 0.9723640096207574,
+    "accuracy_upper_ci": 0.9756820776949053,
+    "training_time": 119.84138417243958
+  }
+}

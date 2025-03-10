@@ -43,6 +43,9 @@ class ClassificationResults(BaseModel):
     auc: float
     auc_lower_ci: float
     auc_upper_ci: float
+    aucpr: float  #
+    aucpr_lower_ci: float
+    aucpr_upper_ci: float
     f1: float
     f1_lower_ci: float
     f1_upper_ci: float
@@ -676,6 +679,7 @@ def train_and_evaluate_model(
     outcome: str,
     output_dir: str,
     collect_predictions: bool = True,
+    handle_imbalance: bool = False,
 ) -> Tuple[ClassificationResults, Optional[np.ndarray]]:
     """Train a model and evaluate it.
 
@@ -689,13 +693,36 @@ def train_and_evaluate_model(
         outcome: Name of the outcome variable
         output_dir: Directory to save results
         collect_predictions: Whether to return prediction probabilities for calibration analysis
+        handle_imbalance: Whether to apply class weighting for imbalanced datasets
 
     Returns:
         Tuple of (ClassificationResults, predicted_probabilities)
     """
+    from sklearn.metrics import precision_recall_curve, auc as sklearn_auc
+    from sklearn.metrics import average_precision_score
+
     # Ensure output directory exists
     model_output_dir = f"{output_dir}/{model_type}"
     os.makedirs(model_output_dir, exist_ok=True)
+
+    # Check for class imbalance and print information
+    class_counts = y_train.value_counts()
+    class_ratio = class_counts.min() / class_counts.max()
+    is_imbalanced = class_ratio < 0.3  # A common threshold for imbalance
+
+    print("Class distribution in training set:")
+    for class_label, count in class_counts.items():
+        print(f"  Class {class_label}: {count} ({count/len(y_train):.2%})")
+    print(f"Class ratio (minority/majority): {class_ratio:.3f}")
+
+    if is_imbalanced:
+        print("Warning: Dataset appears imbalanced.")
+        if handle_imbalance:
+            print("Applying class weighting to handle imbalance.")
+        else:
+            print(
+                "Class weighting not enabled. Consider setting handle_imbalance=True for better results."
+            )
 
     # Standardize features
     scaler = StandardScaler()
@@ -704,6 +731,33 @@ def train_and_evaluate_model(
 
     # Set up model and hyperparameter search space
     model, parameter_distributions = setup_model(ModelTypes(model_type))
+
+    # Handle imbalanced data if requested
+    if handle_imbalance:
+        # For XGBoost, we modify parameter_distributions to include scale_pos_weight
+        if model_type == ModelTypes.XGBOOST.value:
+            # Calculate the scale_pos_weight based on class distribution
+            negative_samples = sum(y_train == 0)
+            positive_samples = sum(y_train == 1)
+            scale_pos_weight = negative_samples / positive_samples
+
+            # Check if parameter_distributions is a list or dictionary
+            if isinstance(parameter_distributions, list):
+                # Handle list of dictionaries (like for LogisticRegression)
+                for param_dict in parameter_distributions:
+                    if "scale_pos_weight" not in param_dict:
+                        param_dict["scale_pos_weight"] = [1, scale_pos_weight]
+            else:
+                # Handle dictionary
+                if "scale_pos_weight" not in parameter_distributions:
+                    parameter_distributions["scale_pos_weight"] = [1, scale_pos_weight]
+
+            print(f"Set scale_pos_weight options: [1, {scale_pos_weight:.2f}]")
+
+        # For Logistic Regression, we always include class_weight parameter
+        elif model_type == ModelTypes.LOGISTIC_REGRESSION.value:
+            # For LR, class_weight is already included in parameter_distributions in setup_model
+            print("Using class_weight parameter options for Logistic Regression")
 
     # RandomizedSearchCV for parameter tuning
     random_search = RandomizedSearchCV(
@@ -738,6 +792,16 @@ def train_and_evaluate_model(
     accuracy = accuracy_score(y_test, y_pred)
     f1 = f1_score(y_test, y_pred)
 
+    # Calculate AUCPR (Area Under Precision-Recall Curve)
+    precision, recall, _ = precision_recall_curve(y_test, y_pred_proba)
+    aucpr = sklearn_auc(recall, precision)
+    # Alternative calculation using average_precision_score
+    avg_precision = average_precision_score(y_test, y_pred_proba)
+
+    # Print which metric was used
+    print(f"AUCPR: {aucpr:.4f} (calculated from precision-recall curve)")
+    print(f"Average Precision: {avg_precision:.4f} (alternative calculation)")
+
     # Calculate confidence intervals
     roc_auc_ci_lower, roc_auc_ci_upper, _ = bootstrap_metric_confidence_interval(
         y_test, y_pred_proba, roc_auc_score
@@ -749,12 +813,22 @@ def train_and_evaluate_model(
         y_test, y_pred, f1_score
     )
 
+    # Calculate AUCPR confidence intervals
+    def pr_auc_score(y_true, y_score):
+        precision, recall, _ = precision_recall_curve(y_true, y_score)
+        return sklearn_auc(recall, precision)
+
+    aucpr_ci_lower, aucpr_ci_upper, _ = bootstrap_metric_confidence_interval(
+        y_test, y_pred_proba, pr_auc_score
+    )
+
     # Print evaluation metrics
     print(f"\n{model_name} - {outcome} Classification Results:")
     print(
         f"Accuracy: {accuracy:.4f} (CI: {accuracy_ci_lower:.4f}-{accuracy_ci_upper:.4f})"
     )
     print(f"ROC AUC: {roc_auc:.4f} (CI: {roc_auc_ci_lower:.4f}-{roc_auc_ci_upper:.4f})")
+    print(f"PR AUC: {aucpr:.4f} (CI: {aucpr_ci_lower:.4f}-{aucpr_ci_upper:.4f})")
     print(f"F1 Score: {f1:.4f} (CI: {f1_ci_lower:.4f}-{f1_ci_upper:.4f})")
     print("\nClassification Report:")
     print(classification_report(y_test, y_pred))
@@ -778,6 +852,9 @@ def train_and_evaluate_model(
         roc_auc=roc_auc,
         roc_auc_ci_lower=roc_auc_ci_lower,
         roc_auc_ci_upper=roc_auc_ci_upper,
+        aucpr=aucpr,
+        aucpr_ci_lower=aucpr_ci_lower,
+        aucpr_ci_upper=aucpr_ci_upper,
         f1=f1,
         f1_ci_lower=f1_ci_lower,
         f1_ci_upper=f1_ci_upper,
@@ -792,6 +869,16 @@ def train_and_evaluate_model(
 
     # Plot ROC curve
     plot_roc_curve(
+        y_test=y_test,
+        y_pred_proba=y_pred_proba,
+        model_type=model_type,
+        model_name=model_name,
+        outcome=outcome,
+        output_dir=output_dir,
+    )
+
+    # Plot Precision-Recall curve
+    plot_pr_curve(
         y_test=y_test,
         y_pred_proba=y_pred_proba,
         model_type=model_type,
@@ -839,6 +926,9 @@ def train_and_evaluate_model(
         auc=roc_auc,
         auc_lower_ci=roc_auc_ci_lower,
         auc_upper_ci=roc_auc_ci_upper,
+        aucpr=aucpr,
+        aucpr_lower_ci=aucpr_ci_lower,
+        aucpr_upper_ci=aucpr_ci_upper,
         f1=f1,
         f1_lower_ci=f1_ci_lower,
         f1_upper_ci=f1_ci_upper,
@@ -854,6 +944,65 @@ def train_and_evaluate_model(
         return results, None
 
 
+def plot_pr_curve(
+    y_test: pd.Series,
+    y_pred_proba: np.ndarray,
+    model_type: str,
+    model_name: str,
+    outcome: str,
+    output_dir: str,
+) -> None:
+    """Plot Precision-Recall curve for a model.
+
+    Args:
+        y_test: True labels
+        y_pred_proba: Predicted probabilities
+        model_type: Type of model
+        model_name: Name of model
+        outcome: Outcome being predicted
+        output_dir: Directory to save plot
+    """
+    from sklearn.metrics import precision_recall_curve, average_precision_score
+
+    # Ensure model type subdirectory exists
+    model_dir = f"{output_dir}/{model_type}"
+    os.makedirs(model_dir, exist_ok=True)
+
+    precision, recall, thresholds = precision_recall_curve(y_test, y_pred_proba)
+    avg_precision = average_precision_score(y_test, y_pred_proba)
+
+    # Calculate no-skill line (proportion of positive samples)
+    no_skill = sum(y_test) / len(y_test)
+
+    plt.figure(figsize=(10, 8))
+    plt.plot(
+        recall,
+        precision,
+        color="darkorange",
+        lw=2,
+        label=f"PR curve (AP = {avg_precision:.2f})",
+    )
+    plt.plot(
+        [0, 1],
+        [no_skill, no_skill],
+        color="navy",
+        lw=2,
+        linestyle="--",
+        label=f"No Skill (baseline = {no_skill:.2f})",
+    )
+    plt.xlim([0.0, 1.0])
+    plt.ylim([0.0, 1.05])
+    plt.xlabel("Recall")
+    plt.ylabel("Precision")
+    plt.title(
+        f"{model_type} {model_name} - Precision-Recall Curve for {outcome} Detection"
+    )
+    plt.legend(loc="best")
+    plt.grid(True, alpha=0.3)
+    plt.savefig(f"{model_dir}/{model_name}_pr_curve.png")
+    plt.close()
+
+
 def save_results_to_file(
     model_type: str,
     model_name: str,
@@ -867,6 +1016,9 @@ def save_results_to_file(
     roc_auc: float,
     roc_auc_ci_lower: float,
     roc_auc_ci_upper: float,
+    aucpr: float,
+    aucpr_ci_lower: float,
+    aucpr_ci_upper: float,
     f1: float,
     f1_ci_lower: float,
     f1_ci_upper: float,
@@ -891,6 +1043,9 @@ def save_results_to_file(
         )
         f.write(
             f"ROC AUC: {roc_auc:.4f} (CI: {roc_auc_ci_lower:.4f}-{roc_auc_ci_upper:.4f})\n"
+        )
+        f.write(
+            f"PR AUC: {aucpr:.4f} (CI: {aucpr_ci_lower:.4f}-{aucpr_ci_upper:.4f})\n"
         )
         f.write(f"F1 Score: {f1:.4f} (CI: {f1_ci_lower:.4f}-{f1_ci_upper:.4f})\n\n")
         f.write("Classification Report:\n")
@@ -1028,6 +1183,7 @@ def run_experiment(
     model_type: str,
     outcome: str,
     output_dir: str,
+    handle_imbalance: bool = False,
 ) -> Tuple[ClassificationResults, np.ndarray]:
     """Run a single experiment.
 
@@ -1037,6 +1193,7 @@ def run_experiment(
         model_type: Type of model to use
         outcome: Outcome variable name
         output_dir: Directory to save results
+        handle_imbalance: Whether to apply class weighting for imbalanced datasets
 
     Returns:
         Tuple of (ClassificationResults, prediction_probabilities)
@@ -1060,6 +1217,7 @@ def run_experiment(
         outcome=outcome,
         output_dir=output_dir,
         collect_predictions=True,
+        handle_imbalance=handle_imbalance,
     )
 
     return results, y_pred_proba
@@ -1083,7 +1241,13 @@ def main() -> None:
     model = config["model"]
     outcome = config["outcome"]
     results_dir = config["results_directory"]
+    handle_imbalance = config["handle_imbalance"]
     print(f"Running experiments with model {model} for outcome {outcome}")
+
+    if handle_imbalance:
+        print("Class weighting enabled for handling imbalanced data")
+    else:
+        print("Class weighting not enabled (use --handle_imbalance flag to enable)")
 
     # Create a nested directory structure
     outcome_dir = f"{results_dir}/{outcome}"
@@ -1119,6 +1283,20 @@ def main() -> None:
     # Prepare data
     all_features, target = preprocess_data(df, outcome, embedding_df)
 
+    # Print class distribution information for the outcome
+    class_counts = target.value_counts()
+    print(f"\nOutcome ({outcome}) class distribution:")
+    for class_label, count in class_counts.items():
+        print(f"  Class {class_label}: {count} ({count/len(target):.2%})")
+
+    class_ratio = class_counts.min() / class_counts.max()
+    print(f"Class ratio (minority/majority): {class_ratio:.3f}")
+
+    if class_ratio < 0.3:
+        print(
+            "Warning: Dataset appears imbalanced. Consider using the --handle_imbalance flag."
+        )
+
     # Create train/test splits
     X_train, X_test, y_train, y_test = train_test_split(
         all_features, target, test_size=0.2, random_state=42, stratify=target
@@ -1142,6 +1320,7 @@ def main() -> None:
             model_type=model,
             outcome=outcome,
             output_dir=outcome_dir,  # Pass outcome directory as the output_dir
+            handle_imbalance=handle_imbalance,  # Pass the class weighting flag
         )
 
     # Save results

@@ -1,3 +1,4 @@
 results_directory : ./experiment_results/MACE5Y/
 model : xgboost
-outcome : MACE_5Y
+outcome : MACE_5y
+handle_imbalance : True

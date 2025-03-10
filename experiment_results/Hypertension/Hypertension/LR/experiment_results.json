@@ -1,0 +1,97 @@
+{
+  "M0": {
+    "model": "LR",
+    "parameters": {
+      "C": 0.11894755325779102,
+      "class_weight": "balanced",
+      "penalty": "l2",
+      "solver": "lbfgs"
+    },
+    "auc": 0.6752197559653444,
+    "auc_lower_ci": 0.6698596347472032,
+    "auc_upper_ci": 0.6801312309442601,
+    "f1": 0.6591785490090575,
+    "f1_lower_ci": 0.654359318833919,
+    "f1_upper_ci": 0.6645783410920035,
+    "accuracy": 0.6306698087995919,
+    "accuracy_lower_ci": 0.6258108403585919,
+    "accuracy_upper_ci": 0.6346183280289595,
+    "training_time": 367.1617648601532
+  },
+  "M1": {
+    "model": "LR",
+    "parameters": {
+      "C": 0.004132917911457902,
+      "class_weight": null,
+      "penalty": "l1",
+      "solver": "liblinear"
+    },
+    "auc": 0.729576789188704,
+    "auc_lower_ci": 0.7244642770876142,
+    "auc_upper_ci": 0.7345424285354893,
+    "f1": 0.7104922279792746,
+    "f1_lower_ci": 0.7057093089415695,
+    "f1_upper_ci": 0.7151995285953431,
+    "accuracy": 0.6742061660309516,
+    "accuracy_lower_ci": 0.6697359150652317,
+    "accuracy_upper_ci": 0.6787863511576493,
+    "training_time": 2.0887277126312256
+  },
+  "M2": {
+    "model": "LR",
+    "parameters": {
+      "C": 0.14069508739800238,
+      "class_weight": null,
+      "penalty": "l2",
+      "solver": "lbfgs"
+    },
+    "auc": 0.7797218717889075,
+    "auc_lower_ci": 0.7754518175619609,
+    "auc_upper_ci": 0.7836768168552013,
+    "f1": 0.7427279446932475,
+    "f1_lower_ci": 0.7383060749888688,
+    "f1_upper_ci": 0.7469966263457705,
+    "accuracy": 0.7124948373460315,
+    "accuracy_lower_ci": 0.7083033696946138,
+    "accuracy_upper_ci": 0.7170264327883191,
+    "training_time": 647.9093902111053
+  },
+  "M3": {
+    "model": "LR",
+    "parameters": {
+      "C": 0.004132917911457902,
+      "class_weight": null,
+      "penalty": "l1",
+      "solver": "liblinear"
+    },
+    "auc": 0.5003059623231494,
+    "auc_lower_ci": 0.49499954991874906,
+    "auc_upper_ci": 0.5054759047063014,
+    "f1": 0.7013613919957091,
+    "f1_lower_ci": 0.6974042462884295,
+    "f1_upper_ci": 0.705517495333504,
+    "accuracy": 0.5400743422171473,
+    "accuracy_lower_ci": 0.5351181944073273,
+    "accuracy_upper_ci": 0.5447183013046331,
+    "training_time": 10998.660909891129
+  },
+  "M4": {
+    "model": "LR",
+    "parameters": {
+      "C": 0.004132917911457902,
+      "class_weight": null,
+      "penalty": "l1",
+      "solver": "liblinear"
+    },
+    "auc": 0.7295553663607732,
+    "auc_lower_ci": 0.7246734127020938,
+    "auc_upper_ci": 0.7346339703941259,
+    "f1": 0.7107916153962395,
+    "f1_lower_ci": 0.7060088294391009,
+    "f1_upper_ci": 0.7151073986793991,
+    "accuracy": 0.6745219989796166,
+    "accuracy_lower_ci": 0.6697693204732635,
+    "accuracy_upper_ci": 0.6788501251184373,
+    "training_time": 432.6913273334503
+  }
+}

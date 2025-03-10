@@ -1,0 +1,20 @@
+LR M0_PaPaGei_Only - Hypertension Classification Results:
+Best parameters: {'C': np.float64(0.11894755325779102), 'class_weight': 'balanced', 'penalty': 'l2', 'solver': 'lbfgs'}
+Training time: 367.16 seconds
+Accuracy: 0.6307 (CI: 0.6258-0.6346)
+ROC AUC: 0.6752 (CI: 0.6699-0.6801)
+F1 Score: 0.6592 (CI: 0.6544-0.6646)
+
+Classification Report:
+              precision    recall  f1-score   support
+
+         0.0       0.60      0.59      0.60     18931
+         1.0       0.66      0.66      0.66     22230
+
+    accuracy                           0.63     41161
+   macro avg       0.63      0.63      0.63     41161
+weighted avg       0.63      0.63      0.63     41161
+
+Confusion Matrix:
+[[11258  7673]
+ [ 7529 14701]]
