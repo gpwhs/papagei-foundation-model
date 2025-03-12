@@ -40,7 +40,7 @@ weights
 # Installer logs
 pip-log.txt
 pip-delete-this-directory.txt
-
+*.csv
 # Unit test / coverage reports
 htmlcov/
 .tox/
