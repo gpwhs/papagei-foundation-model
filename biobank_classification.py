@@ -1,5 +1,6 @@
 from scipy import stats
 import statsmodels.api as sm
+from sklearn.decomposition import PCA
 import os
 import time
 import argparse
@@ -321,6 +322,7 @@ def preprocess_data(
         Tuple of (features_df, target_series)
     """
     # Extract traditional features
+    embedding_df.to_csv("embedding_df.csv")
     traditional_features = ["age", "sex", "BMI"]
     traditional_df = df[traditional_features]
 
@@ -353,6 +355,7 @@ def setup_experiments(
     Returns:
         Dictionary mapping experiment keys to configurations
     """
+    print(embedding_columns)
     return {
         "M0": ExperimentConfig(
             name="M0_PaPaGei_Only",
@@ -1282,15 +1285,13 @@ def run_experiment(
     return results, y_pred_proba
 
 
-def main() -> None:
-    """Main function to run experiments."""
-    # Parse command line arguments
+def main():
     parser = argparse.ArgumentParser(description="Load Configuration from YAML file")
     parser.add_argument(
         "--config",
         type=str,
         required=False,
-        default="xgb_config.yaml",
+        default="xgb_config_ht.yaml",
         help="Path to the configuration file",
     )
     args = parser.parse_args()
@@ -1301,6 +1302,7 @@ def main() -> None:
     outcome = config["outcome"]
     results_dir = config["results_directory"]
     handle_imbalance = config["handle_imbalance"]
+    # pca_embeddings = config["pca_embeddings"]
     print(f"Running experiments with model {model} for outcome {outcome}")
 
     if handle_imbalance:
@@ -1319,12 +1321,13 @@ def main() -> None:
     if not data_path:
         raise ValueError("BIOBANK_DATA_PATH environment variable is not set")
 
-    df = pd.read_parquet(f"{data_path}/215k_pyppg_features_and_conditions.parquet")
-    df = df.dropna()
+    df = pd.read_parquet(
+        f"{data_path}/250k_waves_conditions_pyppg_first_cleaned.parquet"
+    )
 
     # Convert string representations of arrays to numpy arrays if needed
-    if isinstance(df["ppg"].iloc[0], str):
-        df["ppg"] = df["ppg"].apply(lambda x: np.array(eval(x)))
+    if isinstance(df["ppg_resampled"].iloc[0], str):
+        df["ppg_resampled"] = df["ppg_resampled"].apply(lambda x: np.array(eval(x)))
 
     # Get or compute embeddings
     embeddings = get_embeddings(df, cache_file="embeddings.npy")
@@ -1339,7 +1342,24 @@ def main() -> None:
     if outcome not in embedding_df.columns:
         embedding_df[outcome] = df[outcome]
 
-    # Prepare data
+    # # --- Apply PCA to the embeddings only ---
+    # # Extract original embedding columns (excluding outcome)
+    # original_embedding_columns = [col for col in embedding_df.columns if col != outcome]
+    # pca = PCA(n_components=0.95)  # Retain 95% of variance; adjust as needed
+    # embedding_transformed = pca.fit_transform(embedding_df[original_embedding_columns])
+    # # Create a new DataFrame with PCA features
+    # pca_columns = [f"pca_{i}" for i in range(embedding_transformed.shape[1])]
+    # embedding_df_pca = pd.DataFrame(
+    #     embedding_transformed, columns=pca_columns, index=embedding_df.index
+    # )
+    # # Add outcome column back to the PCA-transformed embedding DataFrame
+    # embedding_df_pca[outcome] = embedding_df[outcome].values
+    #
+    # # Replace the original embedding_df with the PCA-transformed version
+    # embedding_df = embedding_df_pca
+    # print(f"PCA-transformed embeddings shape: {embedding_df.shape}")
+    #
+    # # Prepare data (this combines the PCA-transformed embeddings, traditional, and pyPPG features)
     all_features, target = preprocess_data(df, outcome, embedding_df)
 
     # Print class distribution information for the outcome
@@ -1361,7 +1381,7 @@ def main() -> None:
         all_features, target, test_size=0.2, random_state=42, stratify=target
     )
 
-    # Setup experiments
+    # Setup experiments using the PCA-transformed embedding feature names
     embedding_columns = [col for col in embedding_df.columns if col != outcome]
     experiments = setup_experiments(embedding_columns)
 
@@ -1381,7 +1401,6 @@ def main() -> None:
             output_dir=outcome_dir,  # Pass outcome directory as the output_dir
             handle_imbalance=handle_imbalance,  # Pass the class weighting flag
         )
-
     # Save results
     with open(f"{model_dir}/experiment_results.json", "w") as f:
         import json

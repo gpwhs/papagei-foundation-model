@@ -12,7 +12,6 @@ from enum import Enum
 
 PYPPG_FEATURES = [
     "Tpi",
-    "Tpp",
     "Tsys",
     "Tdia",
     "Tsp",
@@ -123,6 +122,42 @@ class ModelTypes(Enum):
 
     XGBOOST = "xgboost"
     LOGISTIC_REGRESSION = "LR"
+    TABPFN = "tabpfn"
+
+
+def setup_tabpfn_model() -> Tuple[object, Dict]:
+    """
+    Setup TabPFN model with RandomForest wrapper for biobank classification.
+
+    Returns:
+        Tuple[object, Dict]: The model object and hyperparameter search space
+    """
+    try:
+        from tabpfn_extensions.rf_pfn import RandomForestTabPFNClassifier
+        from tabpfn_extensions import TabPFNClassifier
+
+        # Base TabPFN model
+        base_model = TabPFNClassifier(device="cpu")
+
+        # RandomForest wrapper for TabPFN
+        model = RandomForestTabPFNClassifier(tabpfn=base_model)
+
+        # Hyperparameter search space for RandomForestTabPFNClassifier
+        param_distributions = {
+            # Base RandomForest parameters
+            "n_estimators": [50, 100, 200, 300],
+            "max_features": ["sqrt", "log2", None, 0.5, 0.7],
+            "max_samples": [0.5, 0.7, 0.9, None],
+            "bootstrap": [True, False],
+            # TabPFN specific parameters (if exposed by the wrapper)
+            "N_ensemble_configurations": [4, 8, 16, 32],
+            "mix_method": ["mean", "gmm"],
+        }
+
+        return model, param_distributions
+
+    except ImportError:
+        raise ImportError("TabPFN extensions not installed. Please install")
 
 
 def setup_model(model_type: ModelTypes) -> Tuple[object, Dict]:
@@ -153,60 +188,55 @@ def setup_model(model_type: ModelTypes) -> Tuple[object, Dict]:
         }
         return model, param_distributions
 
+    if model_type == ModelTypes.TABPFN:
+        return setup_tabpfn_model()
+
     if model_type == ModelTypes.LOGISTIC_REGRESSION:
         from sklearn.linear_model import LogisticRegression
 
         model = LogisticRegression(max_iter=1000, random_state=42)
         param_distributions = []
+
+        # L1 penalty
         param_distributions.append(
             {
-                "C": [0.5],
+                "C": loguniform(1e-4, 1e3),
                 "penalty": ["l1"],
                 "solver": ["liblinear"],  # Best solver for L1
-                "class_weight": ["balanced"],
+                "class_weight": ["balanced", None],
             }
         )
 
-        # # L1 penalty
-        # param_distributions.append(
-        #     {
-        #         "C": loguniform(1e-4, 1e3),
-        #         "penalty": ["l1"],
-        #         "solver": ["liblinear"],  # Best solver for L1
-        #         "class_weight": ["balanced", None],
-        #     }
-        # )
-        #
-        # # L2 penalty
-        # param_distributions.append(
-        #     {
-        #         "C": loguniform(1e-4, 1e3),
-        #         "penalty": ["l2"],
-        #         "solver": ["lbfgs"],  # Efficient solver for L2
-        #         "class_weight": ["balanced", None],
-        #     }
-        # )
-        #
-        # # Elasticnet penalty
-        # param_distributions.append(
-        #     {
-        #         "C": loguniform(1e-4, 1e3),
-        #         "penalty": ["elasticnet"],
-        #         "solver": ["saga"],  # Only solver for elasticnet
-        #         "l1_ratio": uniform(0, 1),
-        #         "class_weight": ["balanced", None],
-        #     }
-        # )
-        #
-        # # No penalty
-        # param_distributions.append(
-        #     {
-        #         "C": loguniform(1e-4, 1e3),
-        #         "penalty": ["none"],
-        #         "solver": ["lbfgs"],  # Efficient when no penalty
-        #         "class_weight": ["balanced", None],
-        #     }
-        # )
+        # L2 penalty
+        param_distributions.append(
+            {
+                "C": loguniform(1e-4, 1e3),
+                "penalty": ["l2"],
+                "solver": ["lbfgs"],  # Efficient solver for L2
+                "class_weight": ["balanced", None],
+            }
+        )
+
+        # Elasticnet penalty
+        param_distributions.append(
+            {
+                "C": loguniform(1e-4, 1e3),
+                "penalty": ["elasticnet"],
+                "solver": ["saga"],  # Only solver for elasticnet
+                "l1_ratio": uniform(0, 1),
+                "class_weight": ["balanced", None],
+            }
+        )
+
+        # No penalty
+        param_distributions.append(
+            {
+                "C": loguniform(1e-4, 1e3),
+                "penalty": [None],
+                "solver": ["lbfgs"],  # Efficient when no penalty
+                "class_weight": ["balanced", None],
+            }
+        )
         return model, param_distributions
 
     raise ValueError(f"Unsupported model type: {model_type}")

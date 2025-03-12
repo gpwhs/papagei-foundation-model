@@ -1,0 +1,5 @@
+# TabPFN Model Configuration
+model: tabpfn
+outcome: Hypertension  # Change this to your actual outcome variable
+results_directory: ./experiment_results/Hypertension/tabpfn/
+handle_imbalance: False

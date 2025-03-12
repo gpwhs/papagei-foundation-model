@@ -32,7 +32,7 @@ def process_signals(df, source_fs=250, target_fs=125, target_length=1250):
     Preprocess signals to match the model's expected input format
 
     Args:
-        df: DataFrame with 'ppg' column containing single heartbeat signals
+        df: DataFrame with 'ppg_resampled' column containing single heartbeat signals
         source_fs: Original sampling frequency of the signals (250Hz)
         target_fs: Target sampling frequency for the model (125Hz)
         target_length: Target length for the model (1250 samples)
@@ -44,7 +44,7 @@ def process_signals(df, source_fs=250, target_fs=125, target_length=1250):
     norm = Normalize(method="z-score")
 
     for idx, row in tqdm(df.iterrows(), desc="Processing signals"):
-        signal = row["ppg"]
+        signal = row["ppg_resampled"]
 
         # Apply z-score normalization
         try:
