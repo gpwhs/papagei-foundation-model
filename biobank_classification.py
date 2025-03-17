@@ -2,7 +2,6 @@ import os
 import argparse
 
 import pandas as pd
-from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 
 from biobank_experiment_utils import (
@@ -13,6 +12,7 @@ from biobank_experiment_utils import (
 )
 from biobank_reporting_utils import plot_calibration_curves, create_summary
 from biobank_classification_functions import setup_experiments, run_experiment
+from biobank_imbalance_handling import stratified_split_with_sampling
 
 
 def main():
@@ -24,6 +24,7 @@ def main():
         default="xgb_config_ht.yaml",
         help="Path to the configuration file",
     )
+
     args = parser.parse_args()
 
     # Load configuration
@@ -32,16 +33,19 @@ def main():
     outcome = config["outcome"]
     results_dir = config["results_directory"]
     handle_imbalance = config["handle_imbalance"]
-    apply_pca = config["apply_pca"]
-    print(f"Running experiments with model {model} for outcome {outcome}")
+    sampling_method = config["sampling_method"]
+    sampling_strategy = config["sampling_strategy"]
 
-    # Create a nested directory structure,taking into account PCA flags
-    if apply_pca:
-        outcome_dir = f"{results_dir}/{outcome}_PCA"
-        model_dir = f"{outcome_dir}/{model}_PCA"
-    else:
-        outcome_dir = f"{results_dir}/{outcome}"
-        model_dir = f"{outcome_dir}/{model}"
+    # Use specified sampling method if handle_imbalance is True
+
+    print(f"Running experiments with model {model} for outcome {outcome}")
+    print(f"Imbalance handling: {sampling_method} with strategy {sampling_strategy}")
+
+    # Create a nested directory structure, taking into account PCA flags
+    outcome_dir = (
+        f"{results_dir}/{outcome}_{sampling_method if handle_imbalance else ''}"
+    )
+    model_dir = f"{outcome_dir}/{model}"
     os.makedirs(model_dir, exist_ok=True)
 
     # Load data
@@ -53,22 +57,29 @@ def main():
     df = pd.read_parquet(
         f"{data_path}/250k_waves_conditions_pyppg_first_cleaned.parquet"
     )
+
     if handle_imbalance:
-        print("Class weighting enabled for handling imbalanced data")
+        print("Class imbalance handling enabled")
     else:
         check_for_imbalance(df[outcome], outcome)
-    embedding_df = get_embedding_df(df, outcome, apply_pca)
+
+    embedding_df = get_embedding_df(df, outcome)
 
     all_features, target = preprocess_data(df, outcome, embedding_df)
 
-    # Create train/test splits
-    X_train, X_test, y_train, y_test = train_test_split(
-        all_features, target, test_size=0.2, random_state=42, stratify=target
+    # Create train/test splits with optional resampling of training data
+    X_train, X_test, y_train, y_test = stratified_split_with_sampling(
+        all_features,
+        target,
+        test_size=0.2,
+        handle_imbalance=handle_imbalance,
+        sampling_method=sampling_method,
+        sampling_strategy=sampling_strategy,
+        random_state=42,
     )
 
     # Setup experiments using the PCA-transformed embedding feature names
     embedding_columns = [col for col in embedding_df.columns if col != outcome]
-
     experiments = setup_experiments(embedding_columns, outcome)
 
     # Run experiments
@@ -84,9 +95,10 @@ def main():
             y_test=y_test,
             model_type=model,
             outcome=outcome,
-            output_dir=outcome_dir,  # Pass outcome directory as the output_dir
-            handle_imbalance=handle_imbalance,  # Pass the class weighting flag
+            output_dir=outcome_dir,
+            handle_imbalance=handle_imbalance,
         )
+
     # Save results
     with open(f"{model_dir}/experiment_results.json", "w") as f:
         import json
@@ -102,7 +114,7 @@ def main():
             f.write(json.dumps({k: v.dict() for k, v in results.items()}, indent=2))
 
     # Create summary of results
-    create_summary(results, outcome_dir, model)  # Pass outcome directory as results_dir
+    create_summary(results, outcome_dir, model)
 
     # Generate calibration curves and metrics
     calibration_metrics = plot_calibration_curves(

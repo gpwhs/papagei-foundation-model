@@ -664,6 +664,117 @@ def save_feature_importance(
         importance_name = "Feature Importance"
         importance_values = feature_importance
 
+    elif model_type == ModelTypes.CATBOOST.value:
+        # For CatBoost, we can extract feature importance in multiple ways
+
+        # 1. Default feature importance (usually PredictionValuesChange)
+        try:
+            # Get feature importances as a DataFrame with feature names already included
+            importance_df = model.get_feature_importance(prettified=True)
+
+            # If the DataFrame doesn't have the expected format, create it manually
+            if (
+                "Feature Id" not in importance_df.columns
+                or "Importance" not in importance_df.columns
+            ):
+                importance_values = model.get_feature_importance()
+                importance_df = pd.DataFrame(
+                    {"feature": feature_names, "importance": importance_values}
+                )
+            else:
+                # Rename columns to be consistent with other models
+                importance_df = importance_df.rename(
+                    columns={"Feature Id": "feature", "Importance": "importance"}
+                )
+
+            # Sort by importance
+            importance_df = importance_df.sort_values(by="importance", ascending=False)
+
+            # Save to file
+            importance_df.to_csv(
+                f"{model_dir}/{model_name}_feature_importance.csv",
+                index=False,
+            )
+
+            # Get values for plotting
+            importance_name = "Feature Importance"
+            importance_values = importance_df["importance"].values
+            feature_names = importance_df["feature"].values
+
+            # Also create a feature interaction plot if available
+            try:
+                # Save feature interactions if supported by this version of CatBoost
+                interaction_importance = model.get_feature_importance(
+                    type="Interaction"
+                )
+                if len(interaction_importance) > 0:
+                    # Get the top interactions
+                    top_interactions = min(20, len(interaction_importance))
+                    plt.figure(figsize=(12, 8))
+                    plt.barh(
+                        range(top_interactions),
+                        interaction_importance[:top_interactions],
+                    )
+                    plt.yticks(
+                        range(top_interactions),
+                        [
+                            f"{feature_names[int(pair[0])]}<->{feature_names[int(pair[1])]}"
+                            for pair in model.feature_interaction_info_[
+                                "feature_pairs"
+                            ][:top_interactions]
+                        ],
+                    )
+                    plt.xlabel("Interaction Strength")
+                    plt.title(f"{model_type} {model_name} - Top Feature Interactions")
+                    plt.tight_layout()
+                    plt.savefig(f"{model_dir}/{model_name}_feature_interactions.png")
+                    plt.close()
+            except (AttributeError, TypeError) as e:
+                print(f"Feature interaction plot not available: {e}")
+
+            # Get Shapley values-based importances if available
+            try:
+                # This produces SHAP importances which are often more interpretable
+                shap_values = model.get_feature_importance(type="ShapValues")
+                if shap_values is not None and len(shap_values) > 0:
+                    shap_importance = np.abs(shap_values).mean(axis=0)
+                    shap_df = pd.DataFrame(
+                        {"feature": feature_names, "shap_importance": shap_importance}
+                    )
+                    shap_df = shap_df.sort_values(by="shap_importance", ascending=False)
+                    shap_df.to_csv(
+                        f"{model_dir}/{model_name}_shap_importance.csv",
+                        index=False,
+                    )
+
+                    # Plot SHAP importance
+                    num_features = min(20, len(feature_names))
+                    plt.figure(figsize=(12, 8))
+                    plt.barh(
+                        range(num_features),
+                        shap_df["shap_importance"].values[:num_features],
+                        align="center",
+                    )
+                    plt.yticks(
+                        range(num_features), shap_df["feature"].values[:num_features]
+                    )
+                    plt.xlabel("Mean |SHAP Value|")
+                    plt.title(f"{model_type} {model_name} - SHAP Feature Importance")
+                    plt.tight_layout()
+                    plt.savefig(f"{model_dir}/{model_name}_shap_importance.png")
+                    plt.close()
+            except (AttributeError, TypeError) as e:
+                print(f"SHAP values not directly available from model: {e}")
+
+        except Exception as e:
+            print(f"Error getting CatBoost feature importance: {e}")
+            # Fallback to generic approach
+            try:
+                importance_values = model.feature_importances_
+                importance_name = "Feature Importance"
+            except AttributeError:
+                print("Feature importance not available for this CatBoost model")
+                return
     else:
         print(f"Feature importance not implemented for model type: {model_type}")
         return
@@ -671,11 +782,24 @@ def save_feature_importance(
     # Plot top 20 features or all if less than 20
     num_features = min(20, len(feature_names))
     plt.figure(figsize=(12, 8))
-    sorted_idx = np.argsort(importance_values)[::-1]
-    top_features = sorted_idx[:num_features]
 
-    plt.barh(range(len(top_features)), importance_values[top_features], align="center")
-    plt.yticks(range(len(top_features)), [feature_names[i] for i in top_features])
+    # For CatBoost, we might already have sorted importance values
+    if model_type == ModelTypes.CATBOOST.value and isinstance(
+        feature_names, np.ndarray
+    ):
+        # Use the top features directly as they're already sorted
+        top_features_idx = range(min(num_features, len(feature_names)))
+        top_features_values = importance_values[:num_features]
+        top_features_names = feature_names[:num_features]
+    else:
+        # For other models, sort the feature importance
+        sorted_idx = np.argsort(importance_values)[::-1]
+        top_features_idx = sorted_idx[:num_features]
+        top_features_values = importance_values[top_features_idx]
+        top_features_names = [feature_names[i] for i in top_features_idx]
+
+    plt.barh(range(len(top_features_idx)), top_features_values, align="center")
+    plt.yticks(range(len(top_features_idx)), top_features_names)
     plt.xlabel(importance_name)
     plt.title(f"{model_type} {model_name} - Top {num_features} Features for Detection")
     plt.tight_layout()
@@ -699,7 +823,7 @@ def explain_model_predictions(
         model: Trained model
         X_test: Test features
         y_test: Test labels
-        model_type: Type of model (e.g., "LR", "xgboost")
+        model_type: Type of model (e.g., "LR", "xgboost", "catboost")
         model_name: Name of the model for saving outputs
         output_dir: Directory to save results
         num_samples: Number of random samples to explain
@@ -716,6 +840,17 @@ def explain_model_predictions(
         # Create model-specific explainer
         if model_type == ModelTypes.XGBOOST.value:
             explainer = shap.Explainer(model)
+        elif model_type == ModelTypes.CATBOOST.value:
+            # CatBoost needs special handling for SHAP
+            # We need to convert the CatBoost model to a SHAP-compatible format
+            # Method 1: Use TreeExplainer (works for most tree-based models)
+            explainer = shap.TreeExplainer(model)
+
+            # Alternative approach if TreeExplainer doesn't work:
+            # 1. First get the CatBoost model predictions
+            # prediction_function = lambda x: model.predict_proba(x)[:, 1]
+            # background = shap.maskers.Independent(X_test, max_samples=100)
+            # explainer = shap.Explainer(prediction_function, background)
         elif model_type == ModelTypes.LOGISTIC_REGRESSION.value:
             # For linear models, we use a different explainer
             explainer = shap.LinearExplainer(model, X_test)
@@ -728,13 +863,46 @@ def explain_model_predictions(
         X_samples = X_test.iloc[indices]
         y_samples = y_test.iloc[indices]
 
-        # Get SHAP values
-        shap_values = explainer(X_samples)
+        # Get SHAP values - handle CatBoost specifically
+        if model_type == ModelTypes.CATBOOST.value:
+            # For CatBoost with TreeExplainer we need to use specific syntax
+            shap_values = explainer.shap_values(X_samples)
+
+            # TreeExplainer might return a list for binary classification
+            # (one array for each class)
+            if isinstance(shap_values, list):
+                # Use class 1 (positive class) for binary classification
+                shap_values = shap_values[1] if len(shap_values) > 1 else shap_values[0]
+
+            # Convert to SHAP's Explanation object for compatibility with newer SHAP functions
+
+            expected_value = explainer.expected_value
+            if isinstance(expected_value, list):
+                expected_value = (
+                    expected_value[1] if len(expected_value) > 1 else expected_value[0]
+                )
+
+            base_values = np.ones(len(X_samples)) * expected_value
+            shap_explanation = shap.Explanation(
+                values=shap_values,
+                base_values=base_values,
+                data=X_samples.values,
+                feature_names=X_samples.columns.tolist(),
+            )
+        else:
+            # For other models, use the standard approach
+            shap_explanation = explainer(X_samples)
 
         # Plot SHAP values for each sample
         for i in range(num_samples):
             plt.figure(figsize=(12, 6))
-            shap.plots.waterfall(shap_values[i], max_display=10, show=False)
+            if model_type == ModelTypes.CATBOOST.value:
+                # For CatBoost, use the explanation object we created
+                shap_values_to_plot = shap_explanation[i : i + 1]
+            else:
+                shap_values_to_plot = shap_explanation[i]
+
+            shap.plots.waterfall(shap_values_to_plot, max_display=10, show=False)
             plt.title(
                 f"Sample {i+1} - True Label: {y_samples.iloc[i]}, Predicted: {model.predict(X_samples.iloc[[i]])[0]}"
             )
@@ -748,11 +916,30 @@ def explain_model_predictions(
         sample_indices = np.random.choice(len(X_test), size=sample_size, replace=False)
         X_for_summary = X_test.iloc[sample_indices]
 
-        shap_values_summary = explainer(X_for_summary)
+        if model_type == ModelTypes.CATBOOST.value:
+            # Get SHAP values for the summary data
+            shap_values_summary = explainer.shap_values(X_for_summary)
+            if isinstance(shap_values_summary, list):
+                shap_values_summary = (
+                    shap_values_summary[1]
+                    if len(shap_values_summary) > 1
+                    else shap_values_summary[0]
+                )
+
+            # Create a proper Explanation object
+            base_values_summary = np.ones(len(X_for_summary)) * expected_value
+            shap_explanation_summary = shap.Explanation(
+                values=shap_values_summary,
+                base_values=base_values_summary,
+                data=X_for_summary.values,
+                feature_names=X_for_summary.columns.tolist(),
+            )
+        else:
+            shap_explanation_summary = explainer(X_for_summary)
 
         # Bar summary plot
         plt.figure(figsize=(10, 8))
-        shap.plots.bar(shap_values_summary, show=False)
+        shap.plots.bar(shap_explanation_summary, show=False)
         plt.title(f"{model_name} - SHAP Feature Importance")
         plt.tight_layout()
         plt.savefig(f"{model_dir}/{model_name}_shap_importance.png")
@@ -760,7 +947,7 @@ def explain_model_predictions(
 
         # Beeswarm summary plot
         plt.figure(figsize=(10, 8))
-        shap.plots.beeswarm(shap_values_summary, show=False)
+        shap.plots.beeswarm(shap_explanation_summary, show=False)
         plt.title(f"{model_name} - SHAP Summary Plot")
         plt.tight_layout()
         plt.savefig(f"{model_dir}/{model_name}_shap_summary.png")

@@ -1,4 +1,5 @@
 from pydantic import BaseModel
+from catboost import CatBoostClassifier
 from sklearn.decomposition import PCA
 import os
 from typing import Dict, Tuple, List, Any
@@ -24,6 +25,7 @@ class ModelTypes(Enum):
     XGBOOST = "xgboost"
     LOGISTIC_REGRESSION = "LR"
     TABPFN = "tabpfn"
+    CATBOOST = "catboost"
 
 
 class ClassificationResults(BaseModel):
@@ -58,6 +60,36 @@ class ExperimentConfig:
         self.name = name
         self.description = description
         self.feature_columns = feature_columns
+
+
+def setup_catboost_model() -> Tuple[object, Dict]:
+    """
+    Setup CatBoost classifier with hyperparameter search space.
+
+    Returns:
+        Tuple[object, Dict]: The model object and hyperparameter search space
+    """
+    model = CatBoostClassifier(
+        verbose=100,  # Reduce verbosity in production
+        random_seed=42,
+        thread_count=-1,  # Use all available CPU cores
+        allow_writing_files=False,  # Disable writing to disk during training
+    )
+
+    param_distributions = {
+        "learning_rate": [0.01, 0.03, 0.05, 0.1, 0.2],
+        "depth": [4, 6, 8, 10],
+        "l2_leaf_reg": [1, 3, 5, 7, 9],
+        "iterations": [100, 200, 300, 500],
+        "border_count": [32, 64, 128, 254],
+        "bagging_temperature": [0, 1, 10],
+        "random_strength": [1, 10, 100],
+        # "one_hot_max_size": [2, 10, 25],  # Uncomment if using categorical features
+        # Auto class weights for imbalanced datasets
+        "auto_class_weights": ["Balanced", None],
+    }
+
+    return model, param_distributions
 
 
 def setup_tabpfn_model() -> Tuple[object, Dict]:
@@ -182,6 +214,8 @@ def setup_model(model_type: ModelTypes) -> Tuple[object, Dict]:
 
     if model_type == ModelTypes.TABPFN:
         return setup_tabpfn_model()
+    if model_type == ModelTypes.CATBOOST:
+        return setup_catboost_model()
 
     raise ValueError(f"Unsupported model type: {model_type}")
 
@@ -235,7 +269,6 @@ def load_yaml_config(config_path: str) -> dict:
 def get_embedding_df(
     df: pd.DataFrame,
     outcome: str,
-    apply_pca: bool,
     embeddings_file: str = "embeddings.npy",
 ) -> pd.DataFrame:
     """
@@ -249,10 +282,8 @@ def get_embedding_df(
     # embedding_df = remove_highly_corr_features(embedding_df) # don't think this is necessary with PCA?
     if outcome not in embedding_df.columns:
         embedding_df[outcome] = df[outcome]
-    if apply_pca:
-        # Extract original embedding columns (excluding outcome)
-        print("Applying PCA to embeddings...")
-        embedding_df = apply_pca_to_embeddings(embedding_df, outcome)
+    print("Applying PCA to embeddings...")
+    embedding_df = apply_pca_to_embeddings(embedding_df, outcome)
 
     return embedding_df
 

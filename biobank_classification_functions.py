@@ -10,9 +10,10 @@ from sklearn.metrics import (
     roc_auc_score,
     accuracy_score,
     confusion_matrix,
+    recall_score,
 )
 from sklearn.calibration import CalibratedClassifierCV
-from sklearn.model_selection import RandomizedSearchCV
+from sklearn.model_selection import RandomizedSearchCV, StratifiedKFold
 from sklearn.preprocessing import StandardScaler
 from linearprobing.utils import bootstrap_metric_confidence_interval
 from biobank_experiment_utils import (
@@ -30,7 +31,7 @@ from biobank_reporting_utils import (
     explain_model_predictions,
     plot_odds_ratios,
 )
-from biobank_experiment_constants import FULL_PYPPG_FEATURES, get_pyppg_features
+from biobank_experiment_constants import get_pyppg_features
 
 
 def train_and_evaluate_model(
@@ -112,11 +113,12 @@ def train_and_evaluate_model(
     # RandomizedSearchCV for parameter tuning
 
     if handle_imbalance:
+        cv = StratifiedKFold(n_splits=3, shuffle=True, random_state=42)
         random_search = RandomizedSearchCV(
             model,
             param_distributions=parameter_distributions,
             n_iter=200,
-            cv=3,
+            cv=cv,
             scoring="average_precision",
             return_train_score=True,
             n_jobs=-1,
@@ -155,14 +157,29 @@ def train_and_evaluate_model(
     # Evaluate the model
     y_pred = calibrated_best_model.predict(X_test_scaled)
     y_pred_proba = calibrated_best_model.predict_proba(X_test_scaled)[:, 1]
-    thresholds = np.arange(0, 1, 0.01)
-    f1_scores = [f1_score(y_test, (y_pred_proba >= t).astype(int)) for t in thresholds]
-    best_threshold = thresholds[np.argmax(f1_scores)]
-    print(f"Optimal threshold based on F1 score: {best_threshold:.2f}")
+    if handle_imbalance:
+        thresholds = np.arange(0, 1, 0.01)
+        # find best threshold for recall
+        recall_scores = [
+            recall_score(y_test, (y_pred_proba >= t).astype(int)) for t in thresholds
+        ]
+        best_threshold = thresholds[np.argmax(recall_scores)]
+        print(f"Optimal threshold based on recall score: {best_threshold:.2f}")
+        y_pred_custom = (y_pred_proba >= best_threshold).astype(int)
+        y_pred = y_pred_custom
 
-    # Use the optimal threshold to generate final predictions
-    y_pred_custom = (y_pred_proba >= best_threshold).astype(int)
-    y_pred = y_pred_custom
+    else:
+        thresholds = np.arange(0, 1, 0.01)
+
+        f1_scores = [
+            f1_score(y_test, (y_pred_proba >= t).astype(int)) for t in thresholds
+        ]
+        best_threshold = thresholds[np.argmax(f1_scores)]
+        print(f"Optimal threshold based on F1 score: {best_threshold:.2f}")
+
+        # Use the optimal threshold to generate final predictions
+        y_pred_custom = (y_pred_proba >= best_threshold).astype(int)
+        y_pred = y_pred_custom
 
     # Calculate metrics
     roc_auc = roc_auc_score(y_test, y_pred_proba)

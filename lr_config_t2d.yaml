@@ -2,5 +2,5 @@ results_directory: ./experiment_results/T2DM/
 model: LR
 outcome: T2DM
 handle_imbalance: True
-apply_pca: True
-
+sampling_method: none # can be none, borderline_smote, regular_smote, adasyn, smote_tomek, smote_enn
+sampling_strategy: 0.5 # target ratio of minority class to majority
