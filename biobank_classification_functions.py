@@ -10,9 +10,8 @@ from sklearn.metrics import (
     roc_auc_score,
     accuracy_score,
     confusion_matrix,
-    recall_score,
-    make_scorer,
     fbeta_score,
+    make_scorer,
 )
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.model_selection import RandomizedSearchCV, StratifiedKFold
@@ -122,7 +121,7 @@ def train_and_evaluate_model(
             param_distributions=parameter_distributions,
             n_iter=200,
             cv=cv,
-            scoring="average_precision",
+            scoring=f2_scorer,
             return_train_score=True,
             n_jobs=-1,
             verbose=3,
@@ -162,12 +161,15 @@ def train_and_evaluate_model(
     y_pred_proba = calibrated_best_model.predict_proba(X_test_scaled)[:, 1]
     if handle_imbalance:
         thresholds = np.arange(0, 1, 0.01)
-        # find best threshold for recall
-        recall_scores = [
-            recall_score(y_test, (y_pred_proba >= t).astype(int)) for t in thresholds
+        f2_scores = [
+            fbeta_score(y_test, (y_pred_proba >= t).astype(int), beta=2)
+            for t in thresholds
         ]
-        best_threshold = thresholds[np.argmax(recall_scores)]
-        print(f"Optimal threshold based on recall score: {best_threshold:.2f}")
+        best_threshold = thresholds[np.argmax(f2_scores)]
+        best_score = max(f2_scores)
+        print(
+            f"Optimal threshold based on F2 score: {best_threshold:.2f} (F2: {best_score:.4f})"
+        )
         y_pred_custom = (y_pred_proba >= best_threshold).astype(int)
         y_pred = y_pred_custom
 
