@@ -11,6 +11,8 @@ from sklearn.metrics import (
     accuracy_score,
     confusion_matrix,
     recall_score,
+    make_scorer,
+    fbeta_score,
 )
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.model_selection import RandomizedSearchCV, StratifiedKFold
@@ -113,6 +115,7 @@ def train_and_evaluate_model(
     # RandomizedSearchCV for parameter tuning
 
     if handle_imbalance:
+        f2_scorer = make_scorer(fbeta_score, beta=2)
         cv = StratifiedKFold(n_splits=3, shuffle=True, random_state=42)
         random_search = RandomizedSearchCV(
             model,
