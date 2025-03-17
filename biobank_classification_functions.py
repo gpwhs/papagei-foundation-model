@@ -190,6 +190,7 @@ def train_and_evaluate_model(
     roc_auc = roc_auc_score(y_test, y_pred_proba)
     accuracy = accuracy_score(y_test, y_pred)
     f1 = f1_score(y_test, y_pred)
+    f2 = fbeta_score(y_test, y_pred, beta=2)
 
     # Calculate AUCPR (Area Under Precision-Recall Curve)
     precision, recall, _ = precision_recall_curve(y_test, y_pred_proba)
@@ -211,6 +212,9 @@ def train_and_evaluate_model(
     f1_ci_lower, f1_ci_upper, _ = bootstrap_metric_confidence_interval(
         y_test, y_pred, f1_score
     )
+    f2_ci_lower, f2_ci_upper, _ = bootstrap_metric_confidence_interval(
+        y_test, y_pred, fbeta_score, beta=2
+    )
 
     # Calculate AUCPR confidence intervals
     def pr_auc_score(y_true, y_score):
@@ -229,6 +233,7 @@ def train_and_evaluate_model(
     print(f"ROC AUC: {roc_auc:.4f} (CI: {roc_auc_ci_lower:.4f}-{roc_auc_ci_upper:.4f})")
     print(f"PR AUC: {aucpr:.4f} (CI: {aucpr_ci_lower:.4f}-{aucpr_ci_upper:.4f})")
     print(f"F1 Score: {f1:.4f} (CI: {f1_ci_lower:.4f}-{f1_ci_upper:.4f})")
+    print(f"F2 Score: {f2:.4f} (CI: {f2_ci_lower:.4f}-{f2_ci_upper:.4f})")
     print("\nClassification Report:")
     print(classification_report(y_test, y_pred))
 
@@ -318,6 +323,9 @@ def train_and_evaluate_model(
         f1=f1,
         f1_lower_ci=f1_ci_lower,
         f1_upper_ci=f1_ci_upper,
+        f2=f2,
+        f2_lower_ci=f2_ci_lower,
+        f2_upper_ci=f2_ci_upper,
         accuracy=accuracy,
         accuracy_lower_ci=accuracy_ci_lower,
         accuracy_upper_ci=accuracy_ci_upper,

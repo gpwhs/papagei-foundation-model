@@ -211,22 +211,9 @@ def plot_calibration_curves(
 def plot_experiment_comparison(results: dict, model_dir: str):
     """
     Plot experiment comparison metrics with error bars and save the figures.
-
-    This function creates a bar plot for Accuracy, ROC AUC, PR AUC, and F1 Score with
-    95% confidence interval error bars, then saves the combined figure as
-    'experiment_comparison.png' in the given model_dir. It also generates a legend
-    figure saved as 'model_legend.png'.
-
-    Args:
-        results (dict): Dictionary mapping experiment keys (e.g., 'M0', 'M1', ...) to objects
-                        with metric attributes (accuracy, accuracy_lower_ci, accuracy_upper_ci,
-                        auc, auc_lower_ci, auc_upper_ci, aucpr, aucpr_lower_ci, aucpr_upper_ci,
-                        f1, f1_lower_ci, f1_upper_ci, etc.).
-        model_dir (str): Directory to save the generated plots.
     """
-
     # Plot results comparison with error bars
-    plt.figure(figsize=(20, 6))
+    plt.figure(figsize=(24, 6))  # Increased width to accommodate F2 chart
 
     model_names = [f"M{i}" for i in range(5)]
     x = np.arange(len(model_names))
@@ -270,8 +257,16 @@ def plot_experiment_comparison(results: dict, model_dir: str):
     ]
     f1_errors = np.array(f1_errors).T
 
+    # Add F2 values and errors
+    f2_values = [results[m].f2 for m in model_names]
+    f2_errors = [
+        (results[m].f2 - results[m].f2_lower_ci, results[m].f2_upper_ci - results[m].f2)
+        for m in model_names
+    ]
+    f2_errors = np.array(f2_errors).T
+
     # Accuracy subplot
-    plt.subplot(1, 4, 1)
+    plt.subplot(1, 5, 1)  # Updated to 5 subplots
     bars = plt.bar(
         x - width * 1.5,
         accuracy_values,
@@ -295,7 +290,7 @@ def plot_experiment_comparison(results: dict, model_dir: str):
         )
 
     # ROC AUC subplot
-    plt.subplot(1, 4, 2)
+    plt.subplot(1, 5, 2)  # Updated to 5 subplots
     bars = plt.bar(
         x - width / 2,
         auc_values,
@@ -319,7 +314,7 @@ def plot_experiment_comparison(results: dict, model_dir: str):
         )
 
     # PR AUC subplot
-    plt.subplot(1, 4, 3)
+    plt.subplot(1, 5, 3)  # Updated to 5 subplots
     bars = plt.bar(
         x + width / 2,
         pr_auc_values,
@@ -343,7 +338,7 @@ def plot_experiment_comparison(results: dict, model_dir: str):
         )
 
     # F1 Score subplot
-    plt.subplot(1, 4, 4)
+    plt.subplot(1, 5, 4)  # Updated to 5 subplots
     bars = plt.bar(
         x + width * 1.5,
         f1_values,
@@ -354,6 +349,30 @@ def plot_experiment_comparison(results: dict, model_dir: str):
     )
     plt.ylabel("F1 Score")
     plt.title("F1 Score with 95% CI")
+    plt.xticks(x, model_names)
+    for bar in bars:
+        height = bar.get_height()
+        plt.text(
+            bar.get_x() + bar.get_width() / 2.0,
+            height + 0.01,
+            f"{height:.2f}",
+            ha="center",
+            va="bottom",
+            fontsize=9,
+        )
+
+    # F2 Score subplot (new)
+    plt.subplot(1, 5, 5)
+    bars = plt.bar(
+        x + width * 2.5,
+        f2_values,
+        width,
+        color="red",
+        yerr=f2_errors,
+        capsize=5,
+    )
+    plt.ylabel("F2 Score")
+    plt.title("F2 Score with 95% CI")
     plt.xticks(x, model_names)
     for bar in bars:
         height = bar.get_height()
@@ -389,11 +408,6 @@ def plot_experiment_comparison(results: dict, model_dir: str):
 def create_summary(results: dict, results_dir: str, model: str):
     """
     Create a summary of the experiment results.
-
-    Args:
-        results: Dictionary mapping experiment keys to ClassificationResults objects
-        results_dir: Directory to save summary to
-        model: Model type name
     """
     # Ensure model type subdirectory exists
     model_dir = f"{results_dir}/{model}"
@@ -435,6 +449,13 @@ def create_summary(results: dict, results_dir: str, model: str):
                 f"{results['M2'].f1:.4f} ({results['M2'].f1_lower_ci:.4f}-{results['M2'].f1_upper_ci:.4f})",
                 f"{results['M3'].f1:.4f} ({results['M3'].f1_lower_ci:.4f}-{results['M3'].f1_upper_ci:.4f})",
                 f"{results['M4'].f1:.4f} ({results['M4'].f1_lower_ci:.4f}-{results['M4'].f1_upper_ci:.4f})",
+            ],
+            "F2": [  # Add F2 score to summary
+                f"{results['M0'].f2:.4f} ({results['M0'].f2_lower_ci:.4f}-{results['M0'].f2_upper_ci:.4f})",
+                f"{results['M1'].f2:.4f} ({results['M1'].f2_lower_ci:.4f}-{results['M1'].f2_upper_ci:.4f})",
+                f"{results['M2'].f2:.4f} ({results['M2'].f2_lower_ci:.4f}-{results['M2'].f2_upper_ci:.4f})",
+                f"{results['M3'].f2:.4f} ({results['M3'].f2_lower_ci:.4f}-{results['M3'].f2_upper_ci:.4f})",
+                f"{results['M4'].f2:.4f} ({results['M4'].f2_lower_ci:.4f}-{results['M4'].f2_upper_ci:.4f})",
             ],
             "Training_Time": [
                 results["M0"].training_time,
@@ -531,6 +552,9 @@ def save_results_to_file(
     f1: float,
     f1_ci_lower: float,
     f1_ci_upper: float,
+    f2: float,
+    f2_ci_lower: float,
+    f2_ci_upper: float,
     y_test: pd.Series,
     y_pred: np.ndarray,
     cm: np.ndarray,
@@ -557,6 +581,7 @@ def save_results_to_file(
             f"PR AUC: {aucpr:.4f} (CI: {aucpr_ci_lower:.4f}-{aucpr_ci_upper:.4f})\n"
         )
         f.write(f"F1 Score: {f1:.4f} (CI: {f1_ci_lower:.4f}-{f1_ci_upper:.4f})\n\n")
+        f.write(f"F2 Score: {f2:.4f} (CI: {f2_ci_lower:.4f}-{f2_ci_upper:.4f})\n\n")
         f.write("Classification Report:\n")
         f.write(classification_report(y_test, y_pred))
         f.write("\nConfusion Matrix:\n")

@@ -42,6 +42,9 @@ class ClassificationResults(BaseModel):
     f1: float
     f1_lower_ci: float
     f1_upper_ci: float
+    f2: float
+    f2_lower_ci: float
+    f2_upper_ci: float
     accuracy: float
     accuracy_lower_ci: float
     accuracy_upper_ci: float
