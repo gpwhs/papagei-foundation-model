@@ -149,7 +149,6 @@ def train_and_evaluate_model(
     print(f"{model_name} - Best parameters: {random_search.best_params_}")
 
     # Fit the best model (necessary? it should already be fitted)
-    best_model.fit(X_train_scaled, y_train)
     # calibrate using isotonic regression
     calibrated_best_model = CalibratedClassifierCV(
         best_model, method="isotonic", cv="prefit"
@@ -213,7 +212,7 @@ def train_and_evaluate_model(
         y_test, y_pred, f1_score
     )
     f2_ci_lower, f2_ci_upper, _ = bootstrap_metric_confidence_interval(
-        y_test, y_pred, fbeta_score, beta=2
+        y_test, y_pred, f2_scorer
     )
 
     # Calculate AUCPR confidence intervals
