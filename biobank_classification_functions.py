@@ -197,6 +197,9 @@ def train_and_evaluate_model(
     # Alternative calculation using average_precision_score
     avg_precision = average_precision_score(y_test, y_pred_proba)
 
+    def f2_score_function(y_true, y_pred):
+        return fbeta_score(y_true, y_pred, beta=2)
+
     # Print which metric was used
     print(f"AUCPR: {aucpr:.4f} (calculated from precision-recall curve)")
     print(f"Average Precision: {avg_precision:.4f} (alternative calculation)")
@@ -212,7 +215,7 @@ def train_and_evaluate_model(
         y_test, y_pred, f1_score
     )
     f2_ci_lower, f2_ci_upper, _ = bootstrap_metric_confidence_interval(
-        y_test, y_pred, f2_scorer
+        y_test, y_pred, f2_score_function
     )
 
     # Calculate AUCPR confidence intervals
