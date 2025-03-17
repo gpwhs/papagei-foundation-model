@@ -1,5 +1,6 @@
 results_directory: ./experiment_results/Hypertension/
-model: LR
+model: xgboost
 outcome: Hypertension
 handle_imbalance: False
-apply_pca: False
+apply_pca: True
+
