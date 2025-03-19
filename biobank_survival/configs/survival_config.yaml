@@ -1,0 +1,8 @@
+# Survival Analysis Configuration
+outcome: "MACE"  # Binary outcome column (1=event occurred, 0=censored)
+outcome_time: "MACE_days"  # Time to event column (in days)
+results_directory: "results/survival_analysis"
+
+# Cox Model Parameters
+penalizer: 0.1  # Regularization strength (similar to C in logistic regression)
+l1_ratio: 0.0   # L1 ratio (0.0 = Ridge, 1.0 = Lasso, in between = ElasticNet)

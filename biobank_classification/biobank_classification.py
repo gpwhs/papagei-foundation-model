@@ -7,7 +7,7 @@ from tqdm import tqdm
 from biobank_experiment_utils import (
     load_yaml_config,
     get_embedding_df,
-    preprocess_data,
+    preprocess_classification_data,
     check_for_imbalance,
 )
 from biobank_reporting_utils import plot_calibration_curves, create_summary
@@ -65,7 +65,7 @@ def main():
 
     embedding_df = get_embedding_df(df, outcome)
 
-    all_features, target = preprocess_data(df, outcome, embedding_df)
+    all_features, target = preprocess_classification_data(df, outcome, embedding_df)
 
     # Create train/test splits with optional resampling of training data
     X_train, X_test, y_train, y_test = stratified_split_with_sampling(

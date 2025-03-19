@@ -42,6 +42,7 @@ def process_signals(df, source_fs=250, target_fs=125, target_length=1250):
     """
     processed_signals = []
     norm = Normalize(method="z-score")
+    df = df.dropna()
 
     for idx, row in tqdm(df.iterrows(), desc="Processing signals"):
         signal = row["ppg_resampled"]
@@ -85,7 +86,7 @@ def process_signals(df, source_fs=250, target_fs=125, target_length=1250):
     return processed_signals
 
 
-def extract_features(df):
+def extract_features(df: pd.DataFrame, embeddings_file: str):
     """
     Extract features from processed signals using the PaPaGei model
 
@@ -95,19 +96,18 @@ def extract_features(df):
     Returns:
         Array of embeddings for each signal
     """
-    embeddings_file = "embeddings.npy"
-    if os.path.exists(embeddings_file):
-        return np.load(embeddings_file)
 
     # Set up parameters
     source_fs = 250  # Your original sampling frequency
     target_fs = 125  # Model's expected sampling frequency
     target_length = 1250  # Model's expected input length (10 seconds at 125 Hz)
+    print(f"embedding file: {embeddings_file}")
 
     # Create results directory
-    results_dir = "experiment_results"
+    results_dir = "./experiment_results"
     if not os.path.exists(results_dir):
         os.makedirs(results_dir)
+    print(f"Column 'resampled_ppg' exists: {df['ppg_resampled'].notnull().all()}")
 
     processed_signals = process_signals(df, source_fs, target_fs, target_length)
     # Initialize model
@@ -175,7 +175,7 @@ def extract_features(df):
     return np.array(embeddings)
 
 
-def get_embeddings(df: pd.DataFrame, cache_file: str = "embeddings.npy") -> np.ndarray:
+def get_embeddings(df: pd.DataFrame, cache_file: str) -> np.ndarray:
     """Get or compute embeddings with caching.
 
     Args:
@@ -190,7 +190,7 @@ def get_embeddings(df: pd.DataFrame, cache_file: str = "embeddings.npy") -> np.n
         return np.load(cache_file)
 
     print("Extracting features...")
-    embeddings = extract_features(df)
+    embeddings = extract_features(df, cache_file)
 
     # Create directory if it doesn't exist
     os.makedirs(os.path.dirname(cache_file) or ".", exist_ok=True)
