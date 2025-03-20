@@ -35,6 +35,7 @@ def create_model_comparison_plots(
     for model in models:
         # Read the results.txt file
         results_file = f"{results_dir}/{model}/{model}_results.txt"
+        print(f"Reading results from {results_file}")
         if not os.path.exists(results_file):
             print(f"Warning: Results file not found for model {model}")
             continue

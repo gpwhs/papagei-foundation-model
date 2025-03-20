@@ -70,7 +70,7 @@ def main():
     os.makedirs(outcome_dir, exist_ok=True)
 
     # Either load preprocessed data or preprocess from scratch
-    if args.preprocessed_data and os.path.exists(args.preprocessed_data):
+    if not args.preprocessed_data and os.path.exists(args.preprocessed_data):
         print(f"Loading preprocessed data from {args.preprocessed_data}")
         data_dict = load_processed_survival_data(args.preprocessed_data)
 
@@ -166,7 +166,7 @@ def main():
 
     for exp_key, exp_config in tqdm(experiments.items(), desc="Running experiments"):
         try:
-            results[exp_key], model_predictions[exp_key] = run_survival_experiment(
+            results[exp_key] = run_survival_experiment(
                 experiment_config=exp_config,
                 X_train=X_train,
                 X_test=X_test,

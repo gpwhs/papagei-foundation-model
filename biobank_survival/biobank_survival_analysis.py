@@ -635,6 +635,9 @@ def run_survival_experiment(
     # Select features for this experiment
     X_train_exp = X_train[experiment_config.feature_columns]
     X_test_exp = X_test[experiment_config.feature_columns]
+    # need to sanitize column names for anything that makes filenames not work
+    X_train_exp.columns = X_train_exp.columns.str.replace("/", "_")
+    X_test_exp.columns = X_test_exp.columns.str.replace("/", "_")
 
     # Create experiment output directory
     exp_output_dir = f"{output_dir}/{experiment_config.name}"
