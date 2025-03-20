@@ -10,7 +10,7 @@ aft_penalizer: 0.1  # Regularization strength
 
 # Random Survival Forest Parameters
 rsf_n_estimators: 100  # Number of trees
-rsf_max_depth: null  # Maximum depth of trees (null = unlimited)
+rsf_max_depth: 8  # Maximum depth of trees (null = unlimited)
 rsf_min_samples_split: 10  # Minimum samples required to split a node
 rsf_min_samples_leaf: 5  # Minimum samples required at a leaf node
 
