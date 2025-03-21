@@ -208,7 +208,7 @@ def train_random_survival_forest(
         min_samples_split=min_samples_split,
         min_samples_leaf=min_samples_leaf,
         random_state=random_state,
-        n_jobs=-1,  # Use all cores
+        n_jobs=4,  # Use all cores
         verbose=3,
     )
 

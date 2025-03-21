@@ -12,7 +12,6 @@ import os
 import sys
 import argparse
 import pandas as pd
-import numpy as np
 from tqdm import tqdm
 
 # Add the parent directory to the path so we can import the modules
@@ -40,7 +39,6 @@ from biobank_survival_comparison import (
     create_model_comparison_plots,
     compare_multiple_models,
 )
-from biobank_experiment_constants import FULL_PYPPG_FEATURES
 
 
 def main():
@@ -63,7 +61,7 @@ def main():
     parser.add_argument(
         "--models",
         nargs="+",
-        choices=["aft", "rsf", "deepsurv"],
+        choices=["rsf"],
         default=["rsf"],
         help="List of advanced survival models to run",
     )
@@ -77,21 +75,10 @@ def main():
     results_dir = config["results_directory"]
     experiment_name = config.get("experiment_name", "advanced_survival")
 
-    # Model-specific parameters
-    aft_model_type = config.get("aft_model_type", "weibull")
-    aft_penalizer = config.get("aft_penalizer", 0.1)
-
     rsf_n_estimators = config.get("rsf_n_estimators", 100)
     rsf_max_depth = config.get("rsf_max_depth", None)
     rsf_min_samples_split = config.get("rsf_min_samples_split", 10)
     rsf_min_samples_leaf = config.get("rsf_min_samples_leaf", 5)
-
-    deepsurv_hidden_layers = config.get("deepsurv_hidden_layers", [64, 32])
-    deepsurv_learning_rate = config.get("deepsurv_learning_rate", 0.001)
-    deepsurv_batch_size = config.get("deepsurv_batch_size", 64)
-    deepsurv_epochs = config.get("deepsurv_epochs", 100)
-    deepsurv_patience = config.get("deepsurv_patience", 10)
-    deepsurv_device = config.get("deepsurv_device", "cpu")
 
     print(f"Running advanced survival analysis for outcome: {outcome}")
     print(f"Using time-to-event column: {outcome_time}")
@@ -121,7 +108,6 @@ def main():
     df = pd.read_parquet(f"{data_path}/first_visit_survival_data_pyppg.parquet")
     df = df[df[outcome_time] >= 90]
     df.reset_index(drop=True, inplace=True)
-    # take first 200 rows
 
     # Prepare data for survival analysis
     data_dict = prepare_survival_data(
@@ -140,12 +126,6 @@ def main():
     event_test = data_dict["event_test"]
     time_train = data_dict["time_train"]
     time_test = data_dict["time_test"]
-
-    # Get feature names for experiment setup (if available)
-    if "feature_names" in data_dict:
-        feature_names = data_dict["feature_names"]
-    else:
-        feature_names = X_train.columns.tolist()
 
     # Generate a Kaplan-Meier plot for the overall dataset if it doesn't exist
     km_path = f"{outcome_dir}/overall_km_curve.png"
@@ -195,27 +175,6 @@ def main():
         X_test_exp = X_test[exp_config.feature_columns]
 
         # Run each selected model
-        if "aft" in args.models:
-            print("\nTraining Accelerated Failure Time (AFT) model...")
-            try:
-                aft_results = train_aft_model(
-                    X_train=X_train_exp,
-                    X_test=X_test_exp,
-                    time_train=time_train,
-                    time_test=time_test,
-                    event_train=event_train,
-                    event_test=event_test,
-                    model_name=f"{exp_config.name}_AFT",
-                    outcome=outcome,
-                    output_dir=exp_dir,
-                    aft_model_type=aft_model_type,
-                    penalizer=aft_penalizer,
-                )
-                print(f"AFT model C-index: {aft_results.c_index:.4f}")
-                all_results["aft"][exp_key] = aft_results
-            except Exception as e:
-                print(f"Error training AFT model: {e}")
-
         if "rsf" in args.models and SKSURV_AVAILABLE:
             print("\nTraining Random Survival Forest model...")
             try:
@@ -250,33 +209,6 @@ def main():
                 print(f"Error training Random Survival Forest model: {e}")
         elif "rsf" in args.models:
             print("Skipping Random Survival Forest - scikit-survival not available")
-
-        if "deepsurv" in args.models and DEEPSURV_AVAILABLE:
-            print("\nTraining DeepSurv neural network model...")
-            try:
-                deepsurv_results = train_deepsurv(
-                    X_train=X_train_exp,
-                    X_test=X_test_exp,
-                    time_train=time_train,
-                    time_test=time_test,
-                    event_train=event_train,
-                    event_test=event_test,
-                    model_name=f"{exp_config.name}_DeepSurv",
-                    outcome=outcome,
-                    output_dir=exp_dir,
-                    hidden_layers=deepsurv_hidden_layers,
-                    learning_rate=deepsurv_learning_rate,
-                    batch_size=deepsurv_batch_size,
-                    epochs=deepsurv_epochs,
-                    patience=deepsurv_patience,
-                    device=deepsurv_device,
-                )
-                print(f"DeepSurv model C-index: {deepsurv_results.c_index:.4f}")
-                all_results["deepsurv"][exp_key] = deepsurv_results
-            except Exception as e:
-                print(f"Error training DeepSurv model: {e}")
-        elif "deepsurv" in args.models:
-            print("Skipping DeepSurv - PyTorch not available")
 
     # Create comparison plots across models and experiment types
     print("\nCreating model comparison visualizations...")
