@@ -156,9 +156,9 @@ def extract_features(df: pd.DataFrame, embeddings_file: str):
                 if padding > 0:
                     signal = np.pad(signal, (0, padding), mode="constant")
                 else:
-                    signal = signal[:target_length]
-
-            # Prepare for model (add batch and channel dimensions)
+                    signal = signal[
+                        :target_length
+                    ]  # Prepare for model (add batch and channel dimensions)
             signal_tensor = (
                 torch.tensor(signal, dtype=torch.float32)
                 .unsqueeze(0)
