@@ -41,11 +41,12 @@ cat("Tuning RSF hyperparameters on training data...\n")
 tune_result <- tune.rfsrc(
   surv_formula, 
   data = train, 
-  ntreeTry = 300,                     # Fewer trees for speed during tuning
+  ntreeTry = 100,                     # Fewer trees for speed during tuning
   mtryStart = floor(sqrt(length(pca_features))),  # Starting mtry value
   nodesizeTry = 100,                  # Starting nodesize (adjustable for large datasets)
   doBest = FALSE,                      # Do not automatically refit best model here
   nthread = parallel::detectCores()  # Use all available CPU cores
+  do.trace(5)
 
 )
 print(tune_result)
@@ -65,7 +66,7 @@ rf_tuned <- rfsrc(
   mtry = optimal_mtry,
   nodesize = optimal_nodesize,
   importance = TRUE,
-  do.trace = 100,         # Verbose progress every 100 trees
+  do.trace = 5,         # Verbose progress every 100 trees
   nthread = parallel::detectCores()  # Use all available CPU cores
 )
 print(rf_tuned)
