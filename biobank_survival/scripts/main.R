@@ -45,8 +45,8 @@ tune_result <- tune.rfsrc(
   mtryStart = floor(sqrt(length(pca_features))),  # Starting mtry value
   nodesizeTry = c(1000,2500,5000),                  # Starting nodesize (adjustable for large datasets)
   doBest = FALSE,                      # Do not automatically refit best model here
-  nthread = parallel::detectCores()  # Use all available CPU cores
-  do.trace(5)
+  nthread = parallel::detectCores(),  # Use all available CPU cores
+  do.trace = 5
 
 )
 print(tune_result)
