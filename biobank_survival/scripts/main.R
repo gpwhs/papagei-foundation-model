@@ -46,7 +46,6 @@ tune_result <- tune.rfsrc(
   nodesizeTry = c(1000,2500,5000),                  # Starting nodesize (adjustable for large datasets)
   doBest = FALSE,                      # Do not automatically refit best model here
   nthread = parallel::detectCores(),  # Use all available CPU cores
-  do.trace = 5
 
 )
 print(tune_result)
@@ -66,7 +65,6 @@ rf_tuned <- rfsrc(
   mtry = optimal_mtry,
   nodesize = optimal_nodesize,
   importance = TRUE,
-  do.trace = 5,         # Verbose progress every 100 trees
   nthread = parallel::detectCores()  # Use all available CPU cores
 )
 print(rf_tuned)
