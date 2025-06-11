@@ -56,7 +56,7 @@ print("Making predictions and logging AUC per leaf...")
 test_leaf_indices = partitioner.apply(X_test)
 predictions = np.zeros(len(X_test), dtype=int)
 
-for leaf_index in np.unique(test_leaf_indices):
+for leaf_index in tqdm(np.unique(test_leaf_indices)):
     idx = np.where(test_leaf_indices == leaf_index)[0]
     if leaf_index in tabpfn_models:
         preds = tabpfn_models[leaf_index].predict(X_test[idx])
