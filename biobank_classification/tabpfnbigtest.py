@@ -3,7 +3,7 @@ from tqdm import tqdm
 from sklearn.model_selection import train_test_split
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.metrics import accuracy_score, roc_auc_score
-from sklearn.datasets import load_breast_cancer
+from sklearn.datasets import fetch_covtype, load_breast_cancer
 from tabpfn import TabPFNClassifier
 import time
 import torch
@@ -11,9 +11,7 @@ import torch
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 # --- 1. Load a real dataset (Wisconsin Breast Cancer) ---
-print("Loading breast cancer dataset...")
-data = load_breast_cancer()
-X, y = data.data, data.target
+X, y = fetch_covtype(return_X_y=True)
 print(f"Total samples: {X.shape[0]}, features: {X.shape[1]}")
 X_train, X_test, y_train, y_test = train_test_split(
     X, y, test_size=0.1, stratify=y, random_state=42
