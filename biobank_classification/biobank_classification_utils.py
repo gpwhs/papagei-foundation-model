@@ -98,32 +98,9 @@ def setup_tabpfn_model() -> Tuple[object, Dict]:
     Returns:
         Tuple[object, Dict]: The model object and hyperparameter search space
     """
-    try:
-        from tabpfn_extensions.rf_pfn import RandomForestTabPFNClassifier
-        from tabpfn_extensions import TabPFNClassifier
-
-        # Base TabPFN model
-        base_model = TabPFNClassifier(device="cpu")
-
-        # RandomForest wrapper for TabPFN
-        model = RandomForestTabPFNClassifier(tabpfn=base_model)
-
-        # Hyperparameter search space for RandomForestTabPFNClassifier
-        param_distributions = {
-            # Base RandomForest parameters
-            "n_estimators": [50, 100, 200, 300],
-            "max_features": ["sqrt", "log2", None, 0.5, 0.7],
-            "max_samples": [0.5, 0.7, 0.9, None],
-            "bootstrap": [True, False],
-            # TabPFN specific parameters (if exposed by the wrapper)
-            "N_ensemble_configurations": [4, 8, 16, 32],
-            "mix_method": ["mean", "gmm"],
-        }
-
-        return model, param_distributions
-
-    except ImportError:
-        raise ImportError("TabPFN extensions not installed. Please install")
+    raise NotImplementedError(
+        "TabPFN model setup is not implemented yet. Please use other models."
+    )
 
 
 def setup_xgboost_model() -> Tuple[object, Dict]:

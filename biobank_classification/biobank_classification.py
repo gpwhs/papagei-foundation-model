@@ -27,7 +27,6 @@ def main():
 
     args = parser.parse_args()
 
-    # Load configuration
     config = load_yaml_config(args.config)
     model = config["model"]
     outcome = config["outcome"]
@@ -36,19 +35,15 @@ def main():
     sampling_method = config["sampling_method"]
     sampling_strategy = config["sampling_strategy"]
 
-    # Use specified sampling method if handle_imbalance is True
-
     print(f"Running experiments with model {model} for outcome {outcome}")
     print(f"Imbalance handling: {sampling_method} with strategy {sampling_strategy}")
 
-    # Create a nested directory structure, taking into account PCA flags
     outcome_dir = (
         f"{results_dir}/{outcome}_{sampling_method if handle_imbalance else ''}"
     )
     model_dir = f"{outcome_dir}/{model}"
     os.makedirs(model_dir, exist_ok=True)
 
-    # Load data
     print("Loading data...")
     data_path = os.getenv("BIOBANK_DATA_PATH")
     if not data_path:
@@ -67,7 +62,6 @@ def main():
 
     all_features, target = preprocess_classification_data(df, outcome, embedding_df)
 
-    # Create train/test splits with optional resampling of training data
     X_train, X_test, y_train, y_test = stratified_split_with_sampling(
         all_features,
         target,
@@ -78,11 +72,9 @@ def main():
         random_state=42,
     )
 
-    # Setup experiments using the PCA-transformed embedding feature names
     embedding_columns = [col for col in embedding_df.columns if col != outcome]
     experiments = setup_experiments(embedding_columns, outcome)
 
-    # Run experiments
     results = {}
     model_predictions = {}
 
@@ -99,24 +91,13 @@ def main():
             handle_imbalance=handle_imbalance,
         )
 
-    # Save results
     with open(f"{model_dir}/experiment_results.json", "w") as f:
         import json
 
-        # Use model_dump() instead of dict() for Pydantic v2 compatibility
-        try:
-            # For Pydantic v2
-            f.write(
-                json.dumps({k: v.model_dump() for k, v in results.items()}, indent=2)
-            )
-        except AttributeError:
-            # Fallback for Pydantic v1
-            f.write(json.dumps({k: v.dict() for k, v in results.items()}, indent=2))
+        f.write(json.dumps({k: v.model_dump() for k, v in results.items()}, indent=2))
 
-    # Create summary of results
     create_summary(results, outcome_dir, model)
 
-    # Generate calibration curves and metrics
     calibration_metrics = plot_calibration_curves(
         y_test=y_test,
         model_predictions=model_predictions,
@@ -125,7 +106,6 @@ def main():
 
     print(f"All experiments completed successfully! Results saved to {model_dir}/")
 
-    # Print calibration metrics
     print("\nCalibration Metrics (Brier Scores, lower is better):")
     for model_key, brier_score in calibration_metrics.items():
         print(f"{model_key}: {brier_score:.4f}")
