@@ -1,0 +1,6 @@
+results_directory: ./experiment_results/MACCE/
+model: catboost
+outcome: MACCE
+handle_imbalance: True
+sampling_method: none
+sampling_strategy: 0.5

@@ -1,0 +1,7 @@
+results_directory: ./experiment_results/Hypertension/
+model: LR
+outcome: Hypertension
+handle_imbalance: False
+apply_pca: True
+sampling_method: none
+sampling_strategy: 0.5

@@ -1,0 +1,6 @@
+results_directory: ./experiment_results/T2DM/
+model: xgboost
+outcome: T2DM
+handle_imbalance: True
+sampling_method: borderline_smote
+sampling_strategy: 0.5

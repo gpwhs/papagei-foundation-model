@@ -1,0 +1,7 @@
+results_directory: ./experiment_results/T2DM/
+model: catboost
+outcome: T2DM
+handle_imbalance: True
+sampling_method: regular_smote
+sampling_strategy: 0.5
+
