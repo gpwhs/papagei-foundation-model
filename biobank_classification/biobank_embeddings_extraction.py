@@ -4,6 +4,7 @@ from torch_ecg._preprocessors import Normalize
 import numpy as np
 import torch
 from tqdm import tqdm
+
 from models.resnet import ResNet1DMoE
 
 
@@ -189,8 +190,8 @@ def get_embeddings(df: pd.DataFrame, cache_file: str) -> np.ndarray:
         print(f"Loading pre-computed embeddings from {cache_file}")
         return np.load(cache_file)
 
-    print("Extracting features...")
-    embeddings = extract_features(df, cache_file)
+    # print("Extracting features...")
+    # embeddings = extract_features(df, cache_file)
 
     # Create directory if it doesn't exist
     os.makedirs(os.path.dirname(cache_file) or ".", exist_ok=True)

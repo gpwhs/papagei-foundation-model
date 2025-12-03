@@ -1,15 +1,18 @@
 import os
+
 import argparse
 
 import pandas as pd
+
 from tqdm import tqdm
 
 from biobank_experiment_utils import (
     load_yaml_config,
     get_embedding_df,
-    preprocess_classification_data,
     check_for_imbalance,
 )
+from biobank_classification_utils import preprocess_classification_data
+
 from biobank_reporting_utils import plot_calibration_curves, create_summary
 from biobank_classification_functions import setup_experiments, run_experiment
 from biobank_imbalance_handling import stratified_split_with_sampling
@@ -29,7 +32,7 @@ def main():
 
     config = load_yaml_config(args.config)
     model = config["model"]
-    outcome = config["outcome"]
+    outcome = "hypertension"
     results_dir = config["results_directory"]
     handle_imbalance = config["handle_imbalance"]
     sampling_method = config["sampling_method"]
@@ -49,16 +52,39 @@ def main():
     if not data_path:
         raise ValueError("BIOBANK_DATA_PATH environment variable is not set")
 
-    df = pd.read_parquet(
-        f"{data_path}/250k_waves_conditions_pyppg_first_cleaned.parquet"
-    )
+    df = pd.read_parquet(f"{data_path}/mimic_biomarkers_singlebeat.parquet")
+    print(f"Data loaded with shape: {df.shape}")
+    print(f"Columns: {df.columns.tolist()}")
 
     if handle_imbalance:
         print("Class imbalance handling enabled")
     else:
         check_for_imbalance(df[outcome], outcome)
 
-    embedding_df = get_embedding_df(df, outcome)
+    embedding_df = get_embedding_df(df)
+    print(f"Embedding DataFrame shape: {embedding_df.shape}")
+    embedding_df.to_parquet(f"mimic_full_data_with_embeddings.parquet", index=False)
+    embedding_df = pd.read_parquet(f"mimic_full_data_with_embeddings.parquet")
+    print(f"Embedding DataFrame loaded with shape: {embedding_df.shape}")
+    print(f"Columns: {embedding_df.columns.tolist()}")
+    # concatenate the embedding columns with the original DataFrame
+    df = pd.concat([df, embedding_df], axis=1)
+    print(f"Combined DataFrame shape: {df.shape}")
+    print(f"Combined DataFrame columns: {df.columns.tolist()}")
+    # remove columns that mention deltaT
+    df = df.loc[:, ~df.columns.str.contains("deltaT")]
+    print(f"Filtered DataFrame shape: {df.shape}")
+    print(f"Filtered DataFrame columns: {df.columns.tolist()}")
+    # df.to_parquet(
+    #     f"{data_path}/250k_waves_conditions_pyppg_cleaned_embeddings.parquet",
+    #     index=False,
+    # )
+    df = df.drop_duplicates("subject_id")
+    print(f"Final DataFrame shape: {df.shape}")
+    df.to_parquet(
+        f"{data_path}/mimic_biomarkers_singlebeat_cleaned_embeddings.parquet",
+        index=False,
+    )
 
     all_features, target = preprocess_classification_data(df, outcome, embedding_df)
 

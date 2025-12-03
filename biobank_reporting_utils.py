@@ -3,7 +3,8 @@ import pandas as pd
 from typing import Dict, Any
 import numpy as np
 import seaborn as sns
-from biobank_experiment_utils import compute_expected_calibration_error, ModelTypes
+from biobank_classification_utils import ClassificationModelTypes
+from biobank_experiment_utils import compute_expected_calibration_error
 import os
 from sklearn.metrics import classification_report, roc_curve, auc
 import statsmodels.api as sm
@@ -648,7 +649,7 @@ def save_feature_importance(
     os.makedirs(model_dir, exist_ok=True)
 
     # Model-specific handling of feature importance
-    if model_type == ModelTypes.LOGISTIC_REGRESSION.value:
+    if model_type == ClassificationModelTypes.LOGISTIC_REGRESSION.value:
         # For logistic regression, use coefficients
         feature_importance = np.abs(model.coef_[0])
 
@@ -669,7 +670,7 @@ def save_feature_importance(
         importance_name = "Feature Coefficient (absolute value)"
         importance_values = feature_importance
 
-    elif model_type == ModelTypes.XGBOOST.value:
+    elif model_type == ClassificationModelTypes.XGBOOST.value:
         # For XGBoost, use feature_importances_
         feature_importance = model.feature_importances_
 
@@ -689,7 +690,7 @@ def save_feature_importance(
         importance_name = "Feature Importance"
         importance_values = feature_importance
 
-    elif model_type == ModelTypes.CATBOOST.value:
+    elif model_type == ClassificationModelTypes.CATBOOST.value:
         # For CatBoost, we can extract feature importance in multiple ways
 
         # 1. Default feature importance (usually PredictionValuesChange)
@@ -809,7 +810,7 @@ def save_feature_importance(
     plt.figure(figsize=(12, 8))
 
     # For CatBoost, we might already have sorted importance values
-    if model_type == ModelTypes.CATBOOST.value and isinstance(
+    if model_type == ClassificationModelTypes.CATBOOST.value and isinstance(
         feature_names, np.ndarray
     ):
         # Use the top features directly as they're already sorted
@@ -863,9 +864,9 @@ def explain_model_predictions(
         print(f"Generating SHAP explanations for {model_name}...")
 
         # Create model-specific explainer
-        if model_type == ModelTypes.XGBOOST.value:
+        if model_type == ClassificationModelTypes.XGBOOST.value:
             explainer = shap.Explainer(model)
-        elif model_type == ModelTypes.CATBOOST.value:
+        elif model_type == ClassificationModelTypes.CATBOOST.value:
             # CatBoost needs special handling for SHAP
             # We need to convert the CatBoost model to a SHAP-compatible format
             # Method 1: Use TreeExplainer (works for most tree-based models)
@@ -876,7 +877,7 @@ def explain_model_predictions(
             # prediction_function = lambda x: model.predict_proba(x)[:, 1]
             # background = shap.maskers.Independent(X_test, max_samples=100)
             # explainer = shap.Explainer(prediction_function, background)
-        elif model_type == ModelTypes.LOGISTIC_REGRESSION.value:
+        elif model_type == ClassificationModelTypes.LOGISTIC_REGRESSION.value:
             # For linear models, we use a different explainer
             explainer = shap.LinearExplainer(model, X_test)
         else:
@@ -889,7 +890,7 @@ def explain_model_predictions(
         y_samples = y_test.iloc[indices]
 
         # Get SHAP values - handle CatBoost specifically
-        if model_type == ModelTypes.CATBOOST.value:
+        if model_type == ClassificationModelTypes.CATBOOST.value:
             # For CatBoost with TreeExplainer we need to use specific syntax
             shap_values = explainer.shap_values(X_samples)
 
@@ -921,7 +922,7 @@ def explain_model_predictions(
         # Plot SHAP values for each sample
         for i in range(num_samples):
             plt.figure(figsize=(12, 6))
-            if model_type == ModelTypes.CATBOOST.value:
+            if model_type == ClassificationModelTypes.CATBOOST.value:
                 # For CatBoost, use the explanation object we created
                 shap_values_to_plot = shap_explanation[i : i + 1]
             else:
@@ -941,7 +942,7 @@ def explain_model_predictions(
         sample_indices = np.random.choice(len(X_test), size=sample_size, replace=False)
         X_for_summary = X_test.iloc[sample_indices]
 
-        if model_type == ModelTypes.CATBOOST.value:
+        if model_type == ClassificationModelTypes.CATBOOST.value:
             # Get SHAP values for the summary data
             shap_values_summary = explainer.shap_values(X_for_summary)
             if isinstance(shap_values_summary, list):

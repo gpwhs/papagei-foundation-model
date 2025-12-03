@@ -237,7 +237,21 @@ def preprocess_classification_data(
         with open(f"final_pyppg_feature_columns_{outcome}.txt", "w") as f:
             for col in pyppg_df_final.columns:
                 f.write(f"{col}\n")
+    # Keep only embeddings where eid is present in pyppg_df_final
 
+    embedding_df_filtered = embedding_df[
+        embedding_df["eid"].isin(pyppg_df_final["eid"])
+    ]
+
+    # Combine all features
+    all_features = pd.concat(
+        [
+            embedding_df_filtered.set_index("eid"),
+            traditional_df.set_index("eid"),
+            pyppg_df_final.set_index("eid"),
+        ],
+        axis=1,
+    ).reset_index()
     # Combine all features
     all_features = pd.concat([embedding_df, traditional_df, pyppg_df_final], axis=1)
 

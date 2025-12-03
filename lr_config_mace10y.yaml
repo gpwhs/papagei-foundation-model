@@ -1,6 +1,0 @@
-results_directory: ./experiment_results/MACE10Y/
-model: LR 
-outcome: MACE_10y 
-handle_imbalance: True
-sampling_method: none
-sampling_strategy: 0.5

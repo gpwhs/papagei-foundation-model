@@ -45,7 +45,7 @@ def process_signals(df, source_fs=250, target_fs=125, target_length=1250):
     df = df.dropna()
 
     for idx, row in tqdm(df.iterrows(), desc="Processing signals"):
-        signal = row["ppg_resampled"]
+        signal = row["ppg_template"]
 
         # Apply z-score normalization
         try:
@@ -98,7 +98,7 @@ def extract_features(df: pd.DataFrame, embeddings_file: str):
     """
 
     # Set up parameters
-    source_fs = 250  # Your original sampling frequency
+    source_fs = 125  # Your original sampling frequency
     target_fs = 125  # Model's expected sampling frequency
     target_length = 1250  # Model's expected input length (10 seconds at 125 Hz)
     print(f"embedding file: {embeddings_file}")
@@ -107,7 +107,7 @@ def extract_features(df: pd.DataFrame, embeddings_file: str):
     results_dir = "./experiment_results"
     if not os.path.exists(results_dir):
         os.makedirs(results_dir)
-    print(f"Column 'resampled_ppg' exists: {df['ppg_resampled'].notnull().all()}")
+    # print(f"Column 'resampled_ppg' exists: {df['ppg_resampled'].notnull().all()}")
 
     processed_signals = process_signals(df, source_fs, target_fs, target_length)
     # Initialize model

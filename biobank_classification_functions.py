@@ -17,11 +17,11 @@ from sklearn.calibration import CalibratedClassifierCV
 from sklearn.model_selection import RandomizedSearchCV, StratifiedKFold
 from sklearn.preprocessing import StandardScaler
 from linearprobing.utils import bootstrap_metric_confidence_interval
-from biobank_experiment_utils import (
-    setup_model,
-    ModelTypes,
+from biobank_classification_utils import (
+    setup_classification_model,
+    ClassificationModelTypes,
     ClassificationResults,
-    ExperimentConfig,
+    ClassificationExperimentConfig,
 )
 
 from biobank_reporting_utils import (
@@ -77,12 +77,12 @@ def train_and_evaluate_model(
     X_test_scaled = scaler.transform(X_test)
 
     # Set up model and hyperparameter search space
-    model, parameter_distributions = setup_model(ModelTypes(model_type))
+    model, parameter_distributions = setup_classification_model(ClassificationModelTypes(model_type))
 
     # Handle imbalanced data if requested
     if handle_imbalance:
         # For XGBoost, we modify parameter_distributions to include scale_pos_weight
-        if model_type == ModelTypes.XGBOOST.value:
+        if model_type == ClassificationModelTypes.XGBOOST.value:
             # Calculate the scale_pos_weight based on class distribution
             negative_samples = sum(y_train == 0)
             positive_samples = sum(y_train == 1)
@@ -107,8 +107,8 @@ def train_and_evaluate_model(
             print(f"Set scale_pos_weight options: [1, 10, 20, {scale_pos_weight:.2f}]")
 
         # For Logistic Regression, we always include class_weight parameter
-        elif model_type == ModelTypes.LOGISTIC_REGRESSION.value:
-            # For LR, class_weight is already included in parameter_distributions in setup_model
+        elif model_type == ClassificationModelTypes.LOGISTIC_REGRESSION.value:
+            # For LR, class_weight is already included in parameter_distributions in setup_classification_model
             print("Using class_weight parameter options for Logistic Regression")
 
     # RandomizedSearchCV for parameter tuning
@@ -337,7 +337,7 @@ def train_and_evaluate_model(
         training_time=training_time,
     )
 
-    if model_type == ModelTypes.LOGISTIC_REGRESSION.value:
+    if model_type == ClassificationModelTypes.LOGISTIC_REGRESSION.value:
         # Create odds ratio forest plot for logistic regression
         plot_odds_ratios(
             X_train_scaled,
@@ -357,7 +357,7 @@ def train_and_evaluate_model(
 def setup_experiments(
     embedding_columns: List[str],
     outcome: str,
-) -> Dict[str, ExperimentConfig]:
+) -> Dict[str, any]:
     """Set up experiment configurations.
 
     Args:
@@ -367,41 +367,50 @@ def setup_experiments(
     Returns:
         Dictionary mapping experiment keys to configurations
     """
-    print(embedding_columns)
     traditional_features: List[str] = ["age", "sex", "BMI"]
     pyppg_features = get_pyppg_features(outcome)
 
     return {
-        "M0": ExperimentConfig(
-            name="M0_PaPaGei_Only",
-            description="Only PaPaGei features",
-            feature_columns=embedding_columns,
+        "M0": ClassificationExperimentConfig(
+            name="M0_PyPPG_Only",
+            description="Only pyPPG features",
+            feature_columns=pyppg_features,
         ),
-        "M1": ExperimentConfig(
+        "M1": ClassificationExperimentConfig(
             name="M1_Traditional_Only",
             description="Only metadata (age, sex, BMI)",
             feature_columns=traditional_features,
         ),
-        "M2": ExperimentConfig(
-            name="M2_PaPaGei_Traditional",
-            description="Both PaPaGei features and metadata",
+        "M2": ClassificationExperimentConfig(
+            name="M2_PyPPG_Traditional",
+            description="Both pyPPG features and metadata",
+            feature_columns=pyppg_features + traditional_features,
+        ),
+        "M3": ClassificationExperimentConfig(
+            name="M3_PaPaGei_Only",
+            description="Only PaPaGei features",
+            feature_columns=embedding_columns,
+        ),
+        "M4": ClassificationExperimentConfig(
+            name="M4_PaPaGei_Traditional",
+            description="PaPaGei features and metadata",
             feature_columns=embedding_columns + traditional_features,
         ),
-        "M3": ExperimentConfig(
-            name="M3_pyPPG_Only",
-            description="pyPPG features",
-            feature_columns=pyppg_features,
+        "M5": ClassificationExperimentConfig(
+            name="M5_PaPaGei_PyPPG",
+            description="PaPaGei and pyPPG features",
+            feature_columns=embedding_columns + pyppg_features,
         ),
-        "M4": ExperimentConfig(
-            name="M4_pyPPG_Traditional",
-            description="pyPPG features and metadata",
-            feature_columns=pyppg_features + traditional_features,
+        "M6": ClassificationExperimentConfig(
+            name="M6_All_Features",
+            description="PaPaGei, pyPPG features and metadata",
+            feature_columns=embedding_columns + pyppg_features + traditional_features,
         ),
     }
 
 
 def run_experiment(
-    experiment_config: ExperimentConfig,
+    experiment_config,
     X_train: pd.DataFrame,
     X_test: pd.DataFrame,
     y_train: pd.Series,
