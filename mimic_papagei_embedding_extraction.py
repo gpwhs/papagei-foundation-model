@@ -15,4 +15,7 @@ if __name__ == "__main__":
     )
     print(embedding_df.head())
     print([col for col in embedding_df.columns])
+    print(embedding_df.head())
+    full_df = pd.concat([df, embedding_df], axis=1)
+    full_df.to_parquet("mimic_biomarkers_singlebeat_with_embeddings.parquet")
     embedding_df.to_parquet("mimic_papagei_embeddings.parquet")

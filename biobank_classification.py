@@ -81,6 +81,7 @@ def main():
     # )
     df = df.drop_duplicates("subject_id")
     print(f"Final DataFrame shape: {df.shape}")
+    print(df.head())
     df.to_parquet(
         f"{data_path}/mimic_biomarkers_singlebeat_cleaned_embeddings.parquet",
         index=False,
